@@ -1,0 +1,109 @@
+{
+    "label": "Stream Deck Mini",
+    "buttons": {
+        "mute": {
+            "label": "Mute Button",
+            "states": {
+                "default": {
+                    "switch_button_state": "deli",
+                    "image": "seven/cake.png"
+                },
+                "deli": {
+                    "switch_button_state": "default",
+                    "image": "seven/deli.png"
+                }
+            }
+        },
+        "left": {
+            "label": "Left Button",
+            "switch_deck_setup": "volume",
+            "image": "panoo.png"
+        },
+        "right": {
+            "label": "Left Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#0000ff"
+                }
+            }
+        },
+        "setup": {
+            "label": "Setup Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#ffff00",
+                    "switch_deck_setup": "default"
+                }
+            }
+        },
+        "fullscreen": {
+            "label": "Fullscreen Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#00ffff"
+                }
+            }
+        },
+        "volume": {
+            "label": "Volume Mode Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#ffffff"
+                }
+            }
+        },
+        "lovol": {
+            "label": "Low Volume Button",
+            "on_down": "two",
+            "states": {
+                "default": {
+                    "color": "#80ff00"
+                }
+            }
+        },
+        "midvol": {
+            "label": "Medium Volume Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#0080ff"
+                }
+            }
+        },
+        "hivol": {
+            "label": "High Volume Button",
+            "on_down": "fn_dummy",
+            "states": {
+                "default": {
+                    "color": "#00ff80"
+                }
+            }
+        }
+    },
+    "setups": {
+        "default": {
+            "buttons": [
+                { "button": "left",  "state": "default" }, 
+                { "button": "right", "state": "default" }, 
+                { "button": "mute",  "state": "default" }, 
+                { "button": "setup",  "state": "default" }, 
+                { "button": "fullscreen",  "state": "default" }, 
+                { "button": "volume",  "state": "default" }
+            ]
+        },
+        "volume": {
+            "buttons": [
+                { "button": "lovol" }, 
+                { "button": "midvol" }, 
+                { "button": "hivol" }, 
+                { "button": "setup" }, 
+                { "button": "fullscreen" }, 
+                { "button": "volume", "state": "back" }
+            ]
+        }
+    }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "buttondeck"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+log = "*"
+env_logger = "*"
+thiserror = "*"
+serde = "1.0.147"
+serde_derive = "1.0.147"
+serde_json = { version = "1.0.88", features = [ "preserve_order" ] }
+hidapi = "*"
+streamdeck  = "0.7.0"
+
+[[example]]
+name = "demo"
