@@ -286,6 +286,7 @@ fn build_button(builder: &ButtonDeckBuilder, n: &str, b: &ButtonTemplate) -> But
 
 
     Button {
+        
         name: String::from(n),
         label: b.label.clone().unwrap_or_else(|| String::from(n)),
         index: None,
@@ -295,8 +296,10 @@ fn build_button(builder: &ButtonDeckBuilder, n: &str, b: &ButtonTemplate) -> But
         on_button_up: builder.get_button_fn(&b.on_up).cloned(), 
         switch_button_state: b.switch_button_state.clone(),
         switch_deck_setup: b.switch_deck_setup.clone(),
+
         current_state: 0,
-        states, 
+        states,
+
         default_state: ButtonState::default()
     }
 

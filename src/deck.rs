@@ -77,7 +77,7 @@ pub struct Button
     pub (crate) switch_button_state: Option<String>,
     pub (crate) switch_deck_setup: Option<String>,
 
-    pub (crate) default_state: ButtonState
+    pub (crate) default_state: ButtonState // will (hopefully never be used) - make this private!!!!
 
 }
 
