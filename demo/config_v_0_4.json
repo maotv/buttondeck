@@ -1,0 +1,172 @@
+{
+
+
+
+    "stream_deck_mini": {
+        
+        "label": "Stream Deck Mini",
+
+        "wiring": {
+            "A1": { "id": 0, "kind": "cckey", "on_off_threshold": [ 20, 120 ]},
+            "B1": { "id": 1, "name": "B1" },
+            "C1": { "id": 2, "name": "C1" },
+            "A2": { "id": 3, "name": "A2" },
+            "B2": { "id": 4, "name": "B2" },
+            "C2": { "id": 5, "name": "C2" }
+        },
+
+
+
+        "setups": {
+            "default": {
+                "mapping": {
+                    "A1": { "control": "emoji",  "state": "default" }, 
+                    "B1": { "control": "donut", "state": "default" }, 
+                    "C1": { "control": "toggle",  "state": "default" }, 
+                    "A2": { "control": "fish",  "state": "default" }, 
+                    "B2": { "control": "watch",  "state": "default" }, 
+                    "C2": { "control": "robot",  "state": "default" }
+                }
+            },
+            "emoji": {
+                "mapping": {
+                    "A1": { "control": "emoji", "state": "back" }, 
+                    "B1": { "control": "e1" }, 
+                    "C1": { "control": "e2" }, 
+                    "A2": { "control": "e3" }, 
+                    "B2": { "control": "e4" }, 
+                    "C2": { "control": "e5" }
+                }
+            }
+        },
+
+
+
+
+
+        "grids": {
+
+        },
+
+
+        "controls": {
+            "toggle": {
+                "label": "Toggle Button",
+                "type": "button",
+                "states": {
+                    "default": {
+                        "switch_button_state": "night",
+                        "image": "noto/nightday/day.png"
+                    },
+                    "night": {
+                        "switch_button_state": "default",
+                        "image": "noto/nightday/night.png"
+                    }
+                }
+            },
+            "emoji": {
+                "label": "Emoji Button",
+                "states": {
+                    "default": {
+                        "image": "noto/emoji/emoji_mode.png",
+                        "switch_deck_setup": "emoji"
+                    },
+                    "back": {
+                        "image": "noto/emoji/top.png",
+                        "switch_deck_setup": "default"
+                    }
+                }
+            },
+            "back": {
+                "label": "Back Button",
+                "switch_deck_setup": "default",
+                "image": "noto/emoji/top.png"
+            },
+            "e1": {
+                "label": "Emoji1",
+                "image": "noto/emoji/emoji_u1f600.png"
+            },
+            "e2": {
+                "label": "Emoji2",
+                "image": "noto/emoji/emoji_u1f60e.png"
+            },
+            "e3": {
+                "label": "Emoji3",
+                "image": "noto/emoji/emoji_u1f630.png"
+            },
+            "e4": {
+                "label": "Emoji4",
+                "image": "noto/emoji/emoji_u1f621.png"
+            },
+            "e5": {
+                "label": "Emoji5",
+                "image": "noto/emoji/emoji_u1f602.png"
+            },
+            "setup": {
+                "label": "Setup Button",
+                "on_down": "fn_dummy",
+                "states": {
+                    "default": {
+                        "color": "#ffff00",
+                        "switch_deck_setup": "default"
+                    }
+                }
+            },
+            "donut": {
+                "label": "Donut Button",
+                "image": "noto/food/emoji_u1f369.png"
+            },
+            "fish": {
+                "label": "Fish Button",
+                "image": "noto/animals/emoji_u1f41f.png"
+            },
+            "watch": {
+                "label": "Watch Button",
+                "image": "noto/numbers/emoji_u231a.png"
+            },
+            "robot": {
+                "label": "Watch Button",
+                "image": "noto/emoji/emoji_u1f916.png"
+            },
+
+            
+            "volume": {
+                "label": "Volume Mode Button",
+                "on_down": "fn_dummy",
+                "states": {
+                    "default": {
+                        "color": "#ffffff"
+                    }
+                }
+            },
+            "lovol": {
+                "label": "Low Volume Button",
+                "on_down": "two",
+                "states": {
+                    "default": {
+                        "color": "#80ff00"
+                    }
+                }
+            },
+            "midvol": {
+                "label": "Medium Volume Button",
+                "on_down": "fn_dummy",
+                "states": {
+                    "default": {
+                        "color": "#0080ff"
+                    }
+                }
+            },
+            "hivol": {
+                "label": "High Volume Button",
+                "on_down": "fn_dummy",
+                "states": {
+                    "default": {
+                        "color": "#00ff80"
+                    }
+                }
+            }
+        }
+    
+    }
+}

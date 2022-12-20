@@ -1,3 +1,5 @@
 /target
 /Cargo.lock
 /demo/seven
+.DS_Store
+/demo/noto

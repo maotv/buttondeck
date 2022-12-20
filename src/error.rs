@@ -1,4 +1,5 @@
 
+use midir::{MidiInput, MidiOutput};
 use thiserror::Error;
 
 #[derive(Error,Debug)]
@@ -7,6 +8,8 @@ pub enum DeckError {
     Message(String),
     #[error("button ref error")]
     InvalidRef,
+    #[error("button key error {0}")]
+    InvalidKey(String),
     #[error("no directory")]
     NoDirectory,
     #[error("no device")]
@@ -21,4 +24,10 @@ pub enum DeckError {
     StreamdeckError(#[from] streamdeck::Error),
     #[error("no hid api")]
     NoHidApi,
+    #[error("MidiSendError")]
+    MidiSendError(#[from] midir::InitError),
+    #[error("MidiConnectInputError")]
+    MidiConnectInputError(#[from] midir::ConnectError<MidiInput>),
+    #[error("MidiConnectOutputError")]
+    MidiConnectOutputError(#[from] midir::ConnectError<MidiOutput>),
 }

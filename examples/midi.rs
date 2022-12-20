@@ -1,5 +1,5 @@
 use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind};
-use log::{error, warn, info};
+use log::{error, warn, info, debug};
 
 
 fn simplefunc() {
@@ -8,7 +8,6 @@ fn simplefunc() {
 
 fn customfunc(d: &mut ButtonDeck, b: &BtnRef) {
     warn!("Customfunc!");
-    d.switch_to_name("volume")
 }
 
 fn main() {
@@ -31,25 +30,19 @@ fn main_with_result() -> Result<(),DeckError> {
         ButtonFn::DeckArgs(String::from("two"), customfunc),
     ];
 
-    info!("Hello, world!");
+    info!("Hello, midi!");
 
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(DeviceKind::StreamDeck)
-        .with_config("demo/deck.json")
-        .with_functions(functions)
+    let mut deck = ButtonDeckBuilder::new(DeviceKind::GenericMidi)
+        .with_config("demo/midi.json")
         .build()?;
-
-
-
-    // start with a new thread
-    // deck.dump();
-
-
-    // let sender = deck.get_sender();
+        // .with_functions(functions)
+        // .build_first_midi()?;
 
     // run with current thread
+    debug!("now run");
     deck.run();
 
     Ok(())

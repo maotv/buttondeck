@@ -1,22 +1,23 @@
 {
-
     "label": "Stream Deck Mini",
 
     "wiring": {
-        "A1": { "id": 0, "kind": "sdkey" },
-        "B1": { "id": 1, "kind": "sdkey" },
-        "C1": { "id": 2, "kind": "sdkey" },
-        "A2": { "id": 3, "kind": "sdkey" },
-        "B2": { "id": 4, "kind": "sdkey" },
-        "C2": { "id": 5, "kind": "sdkey" }
+        "A1": { "id": 0, "kind": "cckey", "on_off_threshold": [ 20, 120 ]},
+        "B1": { "id": 1, "name": "B1" },
+        "C1": { "id": 2, "name": "C1" },
+        "A2": { "id": 3, "name": "A2" },
+        "B2": { "id": 4, "name": "B2" },
+        "C2": { "id": 5, "name": "C2" }
     },
 
-    "setups": {        
+
+
+    "setups": {
         "default": {
             "mapping": {
                 "A1": { "control": "emoji",  "state": "default" }, 
                 "B1": { "control": "donut", "state": "default" }, 
-                "C1": { "control": "toggle" }, 
+                "C1": { "control": "toggle",  "state": "default" }, 
                 "A2": { "control": "fish",  "state": "default" }, 
                 "B2": { "control": "watch",  "state": "default" }, 
                 "C2": { "control": "robot",  "state": "default" }
@@ -34,16 +35,26 @@
         }
     },
 
+
+
+
+
+    "grids": {
+
+    },
+
+
     "controls": {
         "toggle": {
             "label": "Toggle Button",
+            "type": "button",
             "states": {
-                "day": {
+                "default": {
                     "switch_button_state": "night",
                     "image": "noto/nightday/day.png"
                 },
                 "night": {
-                    "switch_button_state": "day",
+                    "switch_button_state": "default",
                     "image": "noto/nightday/night.png"
                 }
             }
@@ -98,8 +109,7 @@
         },
         "donut": {
             "label": "Donut Button",
-            "image": "noto/food/emoji_u1f369.png",
-            "on_down": "two"
+            "image": "noto/food/emoji_u1f369.png"
         },
         "fish": {
             "label": "Fish Button",
@@ -152,4 +162,5 @@
             }
         }
     }
+   
 }

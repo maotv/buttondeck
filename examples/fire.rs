@@ -1,4 +1,4 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind};
+use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder};
 use log::{error, warn, info};
 
 
@@ -8,7 +8,7 @@ fn simplefunc() {
 
 fn customfunc(d: &mut ButtonDeck, b: &BtnRef) {
     warn!("Customfunc!");
-    d.switch_to_name("volume")
+    // d.switch_to("volume")
 }
 
 fn main() {
@@ -36,18 +36,15 @@ fn main_with_result() -> Result<(),DeckError> {
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(DeviceKind::StreamDeck)
-        .with_config("demo/deck.json")
+    let mut deck = ButtonDeckBuilder::new(buttondeck::DeviceKind::AkaiFire)
+        .with_config("fire/deck.json")
         .with_functions(functions)
         .build()?;
 
 
 
     // start with a new thread
-    // deck.dump();
-
-
-    // let sender = deck.get_sender();
+    // deck.start();
 
     // run with current thread
     deck.run();
