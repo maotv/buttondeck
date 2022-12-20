@@ -1,0 +1,28 @@
+{
+    
+    "midi_in": "nanoKONTROL2 SLIDER/KNOB",
+    "midi_out": "nanoKONTROL2 CTRL",
+
+    "deck": {
+        "label": "Korg nanoKontrol",
+        "wiring": {
+            "A1":   { "id": 16, "kind": "cckey", "on_off_threshold": [ 20, 120 ] },
+            "PLAY": { "id": 41, "kind": "cckey", "on_off_threshold": [ 0, 1 ] },
+            "STOP": { "id": 42, "kind": "cckey", "on_off_threshold": [ 0, 1 ] }
+        },
+        "setups": {
+            "default": {
+                "mapping": {
+                    "A1": { "control": "donut", "state": "default" }
+                }
+            }
+        },
+        "controls": {
+            "donut": {
+                "label": "Donut Button",
+                "image": "noto/food/emoji_u1f369.png"
+            }
+        }
+    }
+
+}
