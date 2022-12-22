@@ -9,9 +9,9 @@ edition = "2021"
 log = "*"
 env_logger = "*"
 thiserror = "*"
-indexmap = {version = "1.9.2", features = ["serde-1"]}
-serde = "1.0.147"
-serde_derive = "1.0.147"
+indexmap = { version = "1.9.2", features = ["serde-1"] }
+serde = "1.0.150"
+serde_derive = "1.0.150"
 serde_json = { version = "1.0.89", features = [ "preserve_order" ] }
 hidapi = "*"
 streamdeck  = "0.7.0"

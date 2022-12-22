@@ -1,0 +1,81 @@
+{
+
+    "discover": [
+
+    ],
+
+
+    "deck": {
+
+        "label": "Stream Deck Mini",
+
+        "wiring": {
+            "A1": { "id": 0 },
+            "B1": { "id": 1 },
+            "C1": { "id": 2 },
+            "A2": { "id": 3 },
+            "B2": { "id": 4 },
+            "C2": { "id": 5 }
+        },
+
+
+
+        "setups": {
+            "default": {
+                "mapping": {
+                    "A1": { "control": "mute",  "state": "default" }, 
+                    "B1": { "control": "prev", "state": "default" }, 
+                    "C1": { "control": "next",  "state": "default" }, 
+                    "A2": { "control": "volume",  "state": "default" }, 
+                    "B2": { "control": "fullscreen",  "state": "default" }, 
+                    "C2": { "control": "standby",  "state": "default" }
+                }
+            }
+        },
+
+
+
+
+
+
+        "controls": {
+
+
+
+            "mute": {
+                "label": "Mute Button",
+                "on_down": "toggle_mute",
+                "states": {
+                    "off": {
+                        "image": "panoo.png"
+                    },
+                    "on": {
+                        "image": "panoox.png"
+                    }
+                }
+            },
+            "prev": {
+                "label": "Previous Frame",
+                "image": "panoo.png"
+            },
+            "next": {
+                "label": "Next Frame",
+                "image": "panoo.png"
+            },
+            "volume": {
+                "label": "Volume Controls",
+                "image": "panoo.png"
+            },
+            "fullscreen": {
+                "label": "Fulscreen Button",
+                "image": "panoo.png"
+            },
+            "standby": {
+                "label": "Standby Button",
+                "image": "panoo.png"
+            }
+
+        }
+    
+    }
+}

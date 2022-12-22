@@ -7,12 +7,12 @@ use std::sync::mpsc::Sender;
 
 use crate::BtnRef;
 use crate::ButtonDeck;
-use crate::DeckEvent;
-use crate::deck::ButtonImage;
+use crate::button::ButtonImage;
 
 use super::{DeckError, Button, ButtonColor};
 
 use self::midideck::MidiDevice;
+use self::midideck::SendMidi;
 pub use self::streamdeck::StreamDeckDevice;
 pub use self::streamdeck::open_streamdeck;
 pub use self::midideck::open_midi;
@@ -47,6 +47,8 @@ pub enum DeviceEventType {
 #[derive(Debug)]
 pub enum DeviceEvent {
     
+    RawMidi(SendMidi),
+
     ButtonDown(usize,f32),
     ButtonUp(usize),
 
@@ -57,7 +59,9 @@ pub enum DeviceEvent {
     // pub index: usize,
     // pub data:  i32
 
-} 
+}
+
+
 
 pub enum ButtonDevice {
     Streamdeck(StreamDeckDevice),

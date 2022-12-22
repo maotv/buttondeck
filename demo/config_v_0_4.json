@@ -1,9 +1,12 @@
 {
 
+    "devices": {
+
+    },
 
 
     "stream_deck_mini": {
-        
+
         "label": "Stream Deck Mini",
 
         "wiring": {

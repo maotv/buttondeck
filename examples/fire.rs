@@ -1,15 +1,8 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder};
+use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeckEvent, FnArg};
 use log::{error, warn, info};
 
 
-fn simplefunc() {
-    warn!("simplefunc!");
-}
 
-fn customfunc(d: &mut ButtonDeck, b: &BtnRef) {
-    warn!("Customfunc!");
-    // d.switch_to("volume")
-}
 
 fn main() {
     
@@ -24,12 +17,6 @@ fn main_with_result() -> Result<(),DeckError> {
 
     let args: Vec<String> = std::env::args().collect();
 
-    let e = || simplefunc();
-
-    let functions = vec![
-        ButtonFn::NoArg(String::from("one"), simplefunc),
-        ButtonFn::DeckArgs(String::from("two"), customfunc),
-    ];
 
     info!("Hello, world!");
 
@@ -38,7 +25,6 @@ fn main_with_result() -> Result<(),DeckError> {
 
     let mut deck = ButtonDeckBuilder::new(buttondeck::DeviceKind::AkaiFire)
         .with_config("fire/deck.json")
-        .with_functions(functions)
         .build()?;
 
 

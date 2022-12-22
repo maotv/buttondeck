@@ -9,7 +9,7 @@ use log::{error, info, debug, warn};
 use streamdeck::{Colour, ImageOptions};
 use ::streamdeck::{pids, StreamDeck};
 
-use crate::{DeckEvent, ButtonDeviceTrait, DeviceKind};
+use crate::{ButtonDeviceTrait, DeviceKind, DeckEvent};
 
 use super::{DeckError, Button, ButtonColor, DeviceEvent, ButtonDevice};
 
@@ -57,7 +57,7 @@ impl StreamDeckDevice {
         }
     }
 
-    pub fn start(self, send_to_buttondeck: Sender<DeviceEvent>) -> Result<Sender<DeviceEvent>> {
+    pub fn start(self, send_to_buttondeck: Sender<DeckEvent>) -> Result<Sender<DeviceEvent>> {
 
         let (tx_to_device,rx_from_deck) = mpsc::channel();
         // let txclone = tx_to_device.clone();
@@ -92,7 +92,7 @@ impl ButtonDeviceTrait for StreamDeckDevice {
 }
 
 
-fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sender<DeviceEvent>) {
+fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sender<DeckEvent>) {
 
     debug!("readwrite_thread");
 
@@ -105,9 +105,9 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
                 debug!("Btn: {:?}", b);
                 for i in 0..b.len() {
                     if sd.btn_state[i] == 0 && b[i] == 1 {
-                        tx.send(DeviceEvent::ButtonDown(i, 1.0));
+                        tx.send(DeckEvent::Device(DeviceEvent::ButtonDown(i, 1.0)));
                     } else  if sd.btn_state[i] == 1 && b[i] == 0 {
-                        tx.send(DeviceEvent::ButtonUp(i));
+                        tx.send(DeckEvent::Device(DeviceEvent::ButtonUp(i)));
                     }
                     sd.btn_state[i] = b[i];
                 }

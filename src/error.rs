@@ -5,6 +5,8 @@ use thiserror::Error;
 #[derive(Error,Debug)]
 pub enum DeckError {
     #[error("message `{0}`")]
+    NYI(&'static str),
+    #[error("message `{0}`")]
     Message(String),
     #[error("button ref error")]
     InvalidRef,

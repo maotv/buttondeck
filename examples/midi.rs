@@ -1,14 +1,7 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind};
+use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, FnArg};
 use log::{error, warn, info, debug};
 
 
-fn simplefunc() {
-    warn!("simplefunc!");
-}
-
-fn customfunc(d: &mut ButtonDeck, b: &BtnRef) {
-    warn!("Customfunc!");
-}
 
 fn main() {
     
@@ -23,13 +16,6 @@ fn main_with_result() -> Result<(),DeckError> {
 
     let args: Vec<String> = std::env::args().collect();
 
-    let e = || simplefunc();
-
-    let functions = vec![
-        ButtonFn::NoArg(String::from("one"), simplefunc),
-        ButtonFn::DeckArgs(String::from("two"), customfunc),
-    ];
-
     info!("Hello, midi!");
 
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
@@ -37,6 +23,7 @@ fn main_with_result() -> Result<(),DeckError> {
 
     let mut deck = ButtonDeckBuilder::new(DeviceKind::GenericMidi)
         .with_config("demo/midi.json")
+        .with_function("one", |a,b| { Ok(()) } )
         .build()?;
         // .with_functions(functions)
         // .build_first_midi()?;

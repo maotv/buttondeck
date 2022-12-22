@@ -1,14 +1,17 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind};
+use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, FnArg};
 use log::{error, warn, info};
 
+type Result<T> = std::result::Result<T,DeckError>;
 
-fn simplefunc() {
+fn simplefunc() -> Result<()>  {
     warn!("simplefunc!");
+    Ok(())
 }
 
-fn customfunc(d: &mut ButtonDeck, b: &BtnRef) {
+fn customfunc(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
     warn!("Customfunc!");
-    d.switch_to_name("volume")
+    d.switch_to("volume");
+    Ok(())
 }
 
 fn main() {
@@ -20,15 +23,18 @@ fn main() {
     
 }
 
-fn main_with_result() -> Result<(),DeckError> {
+fn main_with_result() -> Result<()> {
 
     let args: Vec<String> = std::env::args().collect();
 
     let e = || simplefunc();
 
+
+    let bf = Box::new(simplefunc);
+
     let functions = vec![
-        ButtonFn::NoArg(String::from("one"), simplefunc),
-        ButtonFn::DeckArgs(String::from("two"), customfunc),
+        (String::from("one"), ButtonFn { func: Box::new(|a,b| simplefunc()) }),
+        (String::from("two"), ButtonFn { func: Box::new(customfunc) }),
     ];
 
     info!("Hello, world!");

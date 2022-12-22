@@ -1,17 +1,23 @@
-use std::rc::Rc;
-use std::time::Duration;
-use std::thread;
-use std::collections::HashMap;
-use std::path::{PathBuf, Path};
+
+use log::error;
+use log::{debug, warn};
+
+use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::fmt::Display;
+use std::path::Path;
+use std::path::PathBuf;
+
+use std::rc::Rc;
 use std::str::FromStr;
 
-use log::{debug, warn, error};
 
-// use crate::ButtonDeviceTrait;
+use crate::{BtnRef, ButtonColor, ButtonRef, StateRef2};
+use crate::Button;
 use crate::DeckError;
-use crate::device::{PhysicalKey, ButtonDevice};
-use crate::device::DeviceEventType;
+use crate::device::ButtonDevice;
+use crate::device::PhysicalKey;
 use crate::device::DeviceEvent;
 use std::sync::mpsc::{self, Receiver, Sender};
 
@@ -19,54 +25,89 @@ use std::sync::mpsc::{self, Receiver, Sender};
 type Result<T> = std::result::Result<T,DeckError>;
 
 
+pub enum DeckEvent {
+    Void,
+    Device(DeviceEvent),
+    FnCall(String, FnArg)
+}
+
+
+
 #[derive(Clone,Debug)]
-pub struct NamedRef {
+pub struct FnRef {
+    pub id:   usize,
+    pub name: String,
+}
+
+
+#[derive(Clone,Debug)]
+pub struct SetupRef {
     pub id: usize,
     pub name: String
 }
 
-impl Default for NamedRef {
+impl Default for SetupRef {
     fn default() -> Self {
         Self { id: 0, name: String::from("default") }
     }
 }
 
-pub enum DeckEvent {
-    ButtonUp(usize),
-    ButtonDown(usize),
+
+
+// #[derive(Clone,Debug)]
+// pub struct NamedRef {
+//     pub id: usize,
+//     pub name: String
+// }
+
+// impl Default for NamedRef {
+//     fn default() -> Self {
+//         Self { id: 0, name: String::from("default") }
+//     }
+// }
+
+
+
+
+// pub enum DeckEvent {
+//     ButtonUp(usize),
+//     ButtonDown(usize),
+// }
+
+// pub struct DeckEvent<'a> {
+//     button: &'a BtnRef
+// }
+
+
+
+type NoArgFunc = dyn Fn() -> () + 'static;
+type DeckArgsFunc = dyn FnMut(&mut ButtonDeck, FnArg) -> Result<()> + 'static;
+
+// #[derive(Clone)]
+pub struct ButtonFn {
+    pub func: Box<DeckArgsFunc>
 }
-
-
-
-type NoArgFunc = fn() -> ();
-type DeckArgsFunc = fn(deck: &mut ButtonDeck, btn: &BtnRef) -> ();
-
-#[derive(Clone)]
-pub enum ButtonFn {
-    NoArg(String,NoArgFunc),
-    DeckArgs(String,DeckArgsFunc)
-}
+// impl From<NoArgFunc> for ButtonFn {
+//     fn from(x: NoArgFunc) -> Self {
+//         todo!()
+//     }
+// }
 
 impl ButtonFn {
-    fn call_fn(&self, deck: &mut ButtonDeck, btn: &BtnRef) {
-        match self {
-            ButtonFn::NoArg(_, f) => {
-                f()
-            },
-            ButtonFn::DeckArgs(_, f) => {
-                f(deck,btn)
-            },
+    fn call_fn(&mut self, deck: &mut ButtonDeck, arg: FnArg) {
+        if let Err(e) = (self.func)(deck,arg) {
+            error!("ButtonFn returned error: {:?}", e);
         }
     }
 }
 
 
 
-// the buttons on the device
+/// the buttons on the device
 #[derive(Default)]
 pub struct ButtonSetup {
 
-    pub (crate) reference: NamedRef,
+    pub (crate) reference: SetupRef,
 //    pub (crate) name: String,
     pub (crate) mapping: Vec<ButtonMapping>
 }
@@ -87,274 +128,46 @@ pub struct ButtonMapping {
 }
 
 
-pub struct Button
-{
-    // a private, unique id
-    pub (crate) reference:  BtnRef,
-
-    pub (crate) name:  String,
-    pub (crate) label: String,
-
-    pub (crate) physical: Option<PhysicalKey>,
-
-    // pub (crate) color: Option<ButtonColor>,
-    // pub (crate) image: Option<ButtonImage>,
-
-    pub (crate) defaults: ButtonState,
-
-    pub (crate) default_state: usize,
-    pub (crate) current_state: usize,
-    pub (crate) states: Vec<ButtonState>,
-
-
-
-    // pub (crate) on_button_down: Option<ButtonFn>,
-    // pub (crate) on_button_up: Option<ButtonFn>,
-
-    // pub (crate) switch_button_state: Option<NamedRef>,
-    // pub (crate) switch_deck_setup: Option<NamedRef>,
-
-
+pub struct ButtonDeckSender {
+    pub sender: Sender<DeckEvent>
 }
 
-impl Button {
-
-    fn dump(&self) {
-        println!("  Button {}({}) {{", self.name, self.reference.id);
-        self.defaults.dump("Defaults");
-
-        println!("    States {{");
-        for s in &self.states {
-            s.dump("State");
-        }
-        println!("    }}");
-
-        println!("  }}");
+impl ButtonDeckSender {
+    pub fn send(&self, event: DeckEvent) {
+        self.sender.send(event);
     }
-
-    pub fn assigned_key(&self) -> Option<PhysicalKey> {
-        self.physical.clone()
-    }
-
-    pub fn current_state<'a>(&'a self) -> &'a ButtonState {
-        self.states.get(self.current_state).unwrap_or_else(|| self.states.get(self.default_state).expect("must not go wrong") )
-    }
-
-    // pub fn switch_state_by_name(&mut self, next_state: &NamedRef) -> bool 
-    // {
-
-    //     let index = match self.states.iter().enumerate().find(|(i,s)| s.name == next_state) {
-    //         Some((i,s)) => i,
-    //         None => {
-    //             warn!("cannot find state '{}'", next_state);
-    //             self.current_state
-    //         }
-    //     };
-    
-    //     let last = self.current_state;
-    //     self.current_state = index;
-
-    //     index != last
-
-    // }
-
-    pub fn get_state_ref(&self, name: &str) -> Option<NamedRef> {
-        self.states.iter().find(|s| s.reference.name == name)
-            .map(|n| n.reference.clone())
-    }
-
-    pub fn switch_state(&mut self, next_state: &NamedRef) -> bool 
-    {
-
-        let next = match self.states.get(next_state.id) {
-            Some(s) => next_state.id,
-            None => self.current_state
-        };
-    
-        let last = self.current_state;
-        self.current_state = next;
-
-        next != last
-
-    }
-
-
-    pub fn switch_state_action(&mut self) -> bool {
-        
-        let b = match self.effective_switch_button_state() {
-            Some(s) => Some(s.clone()),
-            None => None
-        };
-
-        if let Some(sn) = b {
-            self.switch_state(&sn)
-        } else {
-            false
-        }
-    }
-
-
-
-    pub fn effective_image<'a>(&'a self) -> Option<&'a ButtonImage> {
-        match &self.current_state().image {
-            Some(c) => Some(c),
-            None => match &self.defaults.image {
-                Some(c) => Some(c),
-                None => None
-            }
-        }
-    }
-
-    pub fn effective_color<'a>(&'a self) -> Option<&'a ButtonColor> {
-        match &self.current_state().color {
-            Some(c) => Some(c),
-            None => match &self.defaults.color {
-                Some(c) => Some(c),
-                None => None
-            }
-        }
-    }
-
-    pub fn effective_button_down<'a>(&'a self) -> Option<ButtonFn> {
-        match &self.current_state().on_button_down {
-            Some(c) => Some(c.clone()),
-            None => match &self.defaults.on_button_down {
-                Some(c) => Some(c.clone()),
-                None => None
-            }
-        }
-    }
-
-    pub fn effective_button_up<'a>(&'a self) -> Option<ButtonFn> {
-        match &self.current_state().on_button_up {
-            Some(c) => Some(c.clone()),
-            None => match &self.defaults.on_button_up {
-                Some(c) => Some(c.clone()),
-                None => None
-            }
-        }
-    }
-
-    pub fn effective_switch_button_state<'a>(&'a self) -> Option<&'a NamedRef> {
-        match &self.current_state().switch_button_state {
-            Some(c) => Some(c),
-            None => match &self.defaults.switch_button_state {
-                Some(c) => Some(c),
-                None => None
-            }
-        }
-    }
-
-    pub fn effective_switch_deck_setup<'a>(&'a self) -> Option<&'a NamedRef> {
-        match &self.current_state().switch_deck_setup {
-            Some(c) => Some(c),
-            None => match &self.defaults.switch_deck_setup {
-                Some(c) => Some(c),
-                None => None
-            }
-        }
-    }
-
-
 }
 
-#[derive(Clone,Debug)]
-pub struct ButtonImage {
-    pub path: PathBuf
+
+pub enum FnArg {
+    None,
+    Bool(bool),
+    Int(isize),
+    Float(f32),
+    Button(BtnRef),
 }
 
-impl ButtonImage {
-    pub fn from_option_string(folder: &Path, s: &Option<String>) -> Option<Self> {
-        if let Some(c) = s {
-            Some(ButtonImage {
-                path: folder.join(c)
-            })
-        } else {
-            None
+
+impl FnArg {
+    pub fn as_bool(&self) -> bool {
+        match self {
+            FnArg::Bool(b) => *b,
+            _ => false 
         }
     }
 }
 
 
 
-#[derive(Clone, Debug)]
-pub struct ButtonColor {
-    pub rgb: u32
-}
-
-impl ButtonColor {
-    pub fn from_option_string(s: &Option<String>) -> Option<Self> {
-        if let Some(c) = s {
-            ButtonColor::from_str(c).ok()
-        } else {
-            None
+impl Display for FnArg {
+    fn fmt(&self, fm: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FnArg::Bool(b) => write!(fm, "FnArg::Bool({})", b),
+            FnArg::Int(i) => write!(fm, "FnArg::Int({})", i),
+            FnArg::Float(f) => write!(fm, "FnArg::Float({})", f),
+            FnArg::Button(b) => write!(fm, "FnArg::Button({})", b.id),
+            FnArg::None => write!(fm, "FnArg::None")
         }
-    }
-}
-
-impl FromStr for ButtonColor {
-    type Err = DeckError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-
-        let hex = s.trim_start_matches("#").trim_start_matches("0x");
-        let num = u32::from_str_radix(hex, 16); 
-
-        Ok(ButtonColor {
-            rgb: num.unwrap_or(0)
-        })
-
-    }
-}
-
-#[derive(Default)]
-pub struct ButtonState
-{
-
-    pub (crate) reference: NamedRef,
-    // pub (crate) name: String,
-
-    pub (crate) color: Option<ButtonColor>,
-    pub (crate) image: Option<ButtonImage>,
-
-    pub (crate) on_button_down: Option<ButtonFn>,
-    pub (crate) on_button_up: Option<ButtonFn>,
-
-    pub (crate) switch_button_state: Option<NamedRef>,
-    pub (crate) switch_deck_setup: Option<NamedRef>,
-
-}
-
-impl ButtonState {
-
-    fn dump(&self, title: &str) {
-        println!("    {} {}({}) {{", title, self.reference.name, self.reference.id);
-        
-        // self.defaults.dump();
-        println!("    }}");
-    }
-
-}
-
-
-#[derive(Clone,Debug)]
-pub struct BtnRef {
-    pub (crate) id: usize,
-    pub (crate) state: Option<NamedRef>
-}
-
-impl BtnRef {
-    pub (crate) fn clone_with_state(&self, state: Option<NamedRef>) -> Self {
-        BtnRef { 
-            id: self.id,
-            state
-        }
-    }
-}
-
-impl AsRef<BtnRef> for BtnRef {
-    fn as_ref(&self) -> &BtnRef {
-        self
     }
 }
 
@@ -362,12 +175,19 @@ impl AsRef<BtnRef> for BtnRef {
 pub struct ButtonDeck
 {
 
+    pub (crate) deckid: usize,
+
     // pub (crate) device: Rc<RefCell<Box<dyn ButtonDevice>>>,
     pub (crate) device: Option<ButtonDevice>,
 
-    pub (crate) device_sender: Sender<DeviceEvent>,
+    pub (crate) device_sender:   Sender<DeviceEvent>,
 
-    pub (crate) device_receiver: Option<Receiver<DeviceEvent>>,
+    pub (crate) device_receiver: Option<Receiver<DeckEvent>>,
+
+    pub (crate) self_sender:     Sender<DeckEvent>,
+
+
+    pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn>>)>,
 
 
     // folder with config & icons
@@ -397,19 +217,13 @@ pub struct ButtonDeck
 }
 
 
-
-
-pub struct ButtonDeckSender {
-    pub sender: Sender<DeviceEvent>
-}
-
-impl ButtonDeck 
+impl ButtonDeck
 {
 
     pub fn initialize(&mut self) -> Result<()> {
 
 
-        let (tx_to_buttondeck,rx_from_device) = mpsc::channel();
+        let (tx_to_buttondeck,rx_from_devices) = mpsc::channel();
 
         let optdev = self.device.take();
         debug!("Device is: {:?}", optdev.is_some());
@@ -419,20 +233,21 @@ impl ButtonDeck
 
             let tx_to_device = match device {
                 ButtonDevice::Streamdeck(mut sd) => {
-                    sd.start(tx_to_buttondeck)
+                    sd.start(tx_to_buttondeck.clone())
                 },
                 ButtonDevice::Midi(mut md) => {
-                    md.start(tx_to_buttondeck)
+                    md.start(tx_to_buttondeck.clone())
                 },
             }?;
 
-            self.device_receiver = Some(rx_from_device);
+            self.device_receiver = Some(rx_from_devices);
             self.device_sender   = tx_to_device.clone();
+            self.self_sender = tx_to_buttondeck.clone();
 
 
 
             let nr = self.setup_arena[0].reference.clone();
-            self.switch_to(&nr);
+            self.switch_to_ref(&nr);
 
             Ok( () )
 
@@ -441,6 +256,13 @@ impl ButtonDeck
         }
 
     }
+
+    pub fn get_sender(&self) -> ButtonDeckSender {
+        ButtonDeckSender {
+            sender: self.self_sender.clone()
+        }
+    }
+
 
     pub fn spawn(&mut self) {
 
@@ -458,30 +280,47 @@ impl ButtonDeck
         loop {
             if let Ok(event) = rx.recv() {
                 match event {
-                    DeviceEvent::ButtonDown(index, velocity) => {
-                        self.on_button_down(index);
-                    }
-
-                    DeviceEvent::ButtonUp(index) => {
-                        self.on_button_up(index);
-                    }
-
-                    _ => {
-
-                    }
+                    DeckEvent::Void => {
+                        warn!("Got void event");
+                    },
+                    DeckEvent::FnCall(name, arg) => {
+                        self.call_fn_by_name(&name, arg)
+                    },
+                    DeckEvent::Device(e) => {
+                        self.handle_device_event(e)
+                    },
                 }
-    
             }
         }
 
 
     }
 
+    fn handle_device_event(&mut self, event: DeviceEvent) {
+        match event {
+            DeviceEvent::ButtonDown(index, velocity) => {
+                self.on_button_down(index);
+            }
+
+            DeviceEvent::ButtonUp(index) => {
+                self.on_button_up(index);
+            }
+
+            _ => {
+                warn!("Unhandled DeviceEvent: {:?}", event)
+            }
+        }
+
+    }
 
 
-    pub fn switch_to_name(&mut self, setup_name: &str) {
-        // let su =  self.setup_arena.iter().find(|s| s.name == setup_name);
- 
+
+
+    pub fn switch_to(&mut self, setup_name: &str) {
+        let su =  self.setup_arena.iter().map(|s| &s.reference).find(|s| s.name == setup_name).cloned();
+        if let Some(r) = su {
+            self.switch_to_ref(&r)
+        }        
      }
  
      pub fn switch_to_default(&mut self) {
@@ -489,13 +328,13 @@ impl ButtonDeck
         let sref = self.setup_arena.get(0).cloned();
 
         if let Some(s) = sref {
-            self.switch_to(&s.reference);
+            self.switch_to_ref(&s.reference);
         }
-//        self.switch_to(&self.setup_arena.get(0).unwrap())
-     }
+
+    }
  
   
-    pub fn switch_to(&mut self, setup: &NamedRef) {
+    pub fn switch_to_ref(&mut self, setup: &SetupRef) {
 
         debug!("switch_to {:?}", setup);
 
@@ -526,7 +365,7 @@ impl ButtonDeck
 
     }
 
-    pub fn init_button(&mut self, mapping: &ButtonMapping) -> Result<()> {
+    fn init_button(&mut self, mapping: &ButtonMapping) -> Result<()> {
 
         debug!("init_button {:?} {}", mapping.key, mapping.button.id);
         self.current_key_map[mapping.key.id] = Some(mapping.clone());
@@ -547,7 +386,7 @@ impl ButtonDeck
     }
 
 
-    pub fn decorate_button(&self, btn: &BtnRef) -> Result<()> {
+    fn decorate_button(&self, btn: &BtnRef) -> Result<()> {
 
         debug!("decorate_button {:?}", &btn);
 
@@ -570,17 +409,104 @@ impl ButtonDeck
         Ok(())
     }
 
+    pub fn toggle_button_state(&mut self, rb: &BtnRef) -> Result<()> {
+        let b = self.button_mut(rb)?;
+        if b.toggle_state() {
+            self.decorate_button(rb)?;
+        }
+        Ok(())
+    }
+
+    pub fn set_button_state<'a, R, S>(&mut self, button: R, state: S) 
+        where   R: AsRef<ButtonRef>,
+                S: AsRef<StateRef2>
+    {
+        // if let Some(rb) = self.button_ref(button_name) {
+        //     if let Ok(button) = self.button_mut(rb) {
+        //         // FIXME button.switch_state(next_state)
+        //     }
+        // }
+    }
+
+    pub fn set_button_color(&mut self, button: ButtonRef, state: StateRef2, color: ButtonColor) {
+    }
+
+    pub fn set_button_color2(&mut self, button: &BtnRef, state: &str, color: ButtonColor) {
+    }
+
+
+
+
+    fn call_fn_by_name(&mut self, name: &str, arg: FnArg) {
+
+        debug!("call_fn_by_name {}", name);
+
+        // for f in  &self.functions {
+        //     debug!("    available: {}", f.0);
+        // }
+
+        let opt_func = self.functions.iter().find(|(n,b)| n == name ).map(|(n,f)| f).cloned();
+        // debug!("    opt_func is some: {}", opt_func.is_some());
+        
+        if let Some(f) = opt_func {
+            debug!("    call_fn");
+            f.borrow_mut().call_fn(self,arg);
+        } else {
+            warn!("Missing Function: {}", name);
+        }
+
+    }
+
+
+
+    fn call_fn(&mut self, fr: &FnRef, br: &BtnRef) {
+
+        let opt_func = self.functions.get(fr.id).cloned(); // .unwrap().clone();
+        let arg = FnArg::Button(br.clone());
+
+        if let Some(f) = opt_func {
+            f.1.borrow_mut().call_fn(self,arg);
+        }
+        
+
+    }
+
+    pub fn button_ref(&self, button: &str) -> Option<BtnRef> {
+        self.button_map.get(button).cloned()
+//        self.button_arena.iter().find(|b| b.reference.name == button)
+    }
+
+    pub fn button_id(&self, button: &ButtonRef) -> Result<usize> {
+
+        match button {
+            ButtonRef::Id(owner, index) => {
+                if *owner != self.deckid { return Err(DeckError::InvalidRef) }
+                Ok(*index)
+            },
+            ButtonRef::Name(n) => {
+                let rb = self.button_map.get(n).cloned().ok_or(DeckError::InvalidRef)?;
+                Ok(rb.id)
+            },
+        }
+    }
+
 
     fn button<R: AsRef<BtnRef>>(&self, r: R) -> Result<&Button> {
         self.button_arena.get(r.as_ref().id).ok_or(DeckError::InvalidRef)
     }
 
+    fn buttonx(&self, r: &ButtonRef) -> Result<&Button> {
+
+        let y = self.button_arena
+            .get(self.button_id(r)?)
+            .ok_or(DeckError::InvalidRef);
+
+        y
+    }
+
     fn button_mut<R: AsRef<BtnRef>>(&mut self, r: R) -> Result<&mut Button> {
         self.button_arena.get_mut(r.as_ref().id).ok_or(DeckError::InvalidRef)
     }
-
-
-
 
     fn on_button_down(&mut self, index: usize) -> Result<()> {
 
@@ -596,9 +522,11 @@ impl ButtonDeck
         
         
         if let Some(br) = btn {
+
+            let opt_fr = self.button(&br)?.effective_button_down().cloned();
             
-            if let Some(bdf) = self.button(&br)?.effective_button_down() {
-                bdf.call_fn(self,&br);
+            if let Some(fr) = opt_fr {
+                self.call_fn(&fr, &br);
             }
 
             
@@ -607,20 +535,15 @@ impl ButtonDeck
                 self.decorate_button(&br)?;
             }
 
-
-            // let setup =  {
-            //     Some(s) => Some(String::from(s)),
-            //     None => None
-            // };
-
             if let Some(s) = self.button_mut(&br)?.effective_switch_deck_setup().cloned() {
-                self.switch_to(&s);
+                self.switch_to_ref(&s);
             }
 
         }
 
        
         Ok(())
+
     }
 
     fn on_button_up(&mut self, index: usize) -> Result<()> {
@@ -635,11 +558,26 @@ impl ButtonDeck
             None => None
         };
 
+
         if let Some(br) = btn {
-            if let Some(bdf) = self.button(&br)?.effective_button_up() {
-                bdf.call_fn(self,&br);
+            let opt_fr = self.button(&br)?.effective_button_up().cloned();
+            
+            if let Some(fr) = opt_fr {
+                self.call_fn(&fr, &br);
             }
         }
+
+            // if let Some(fr) = self.button(&br)?.effective_button_up() {
+            //     if let Some(func) = self.functions.get(fr.id) {
+            //         func.call_fn(self,&br);
+            //     }
+            // }
+        // }
+        // if let Some(br) = btn {
+        //     if let Some(bdf) = self.button(&br)?.effective_button_up() {
+        //         bdf.call_fn(self,&br);
+        //     }
+        // }
 
         Ok(())
     }

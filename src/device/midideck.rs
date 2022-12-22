@@ -1,10 +1,10 @@
-use std::{sync::mpsc, time::Duration};
+use std::{sync::mpsc::{self, Receiver, Sender}, time::Duration, thread};
 
-use log::error;
+use log::{error, info, debug, trace};
 use midir::{MidiInput, MidiOutput, Ignore};
 use wmidi::{MidiMessage, Channel, Note, Velocity, ControlFunction, ControlValue, ProgramNumber, PitchBend};
 
-use crate::{DeviceKind,ButtonDeviceTrait, DeckError, Button};
+use crate::{DeviceKind,ButtonDeviceTrait, DeckError, Button, DeckEvent};
 
 use super::{DeviceEvent, ButtonDevice};
 
@@ -87,7 +87,7 @@ impl From<MidiMessage<'_>> for SendMidi {
 
 pub struct MidiDevice {
     
-    receiver: mpsc::Receiver<SendMidi>,
+    receiver: mpsc::Receiver<DeviceEvent>,
     // sd: StreamDeck,
     // btn_state: [u8;256],
     // btn_names: [Option<ButtonName>;256],
@@ -98,7 +98,7 @@ pub struct MidiDevice {
 }
 
 impl MidiDevice {
-
+/* 
     fn wait_for_events(&mut self, timeout: usize) -> Result<Vec<super::DeviceEvent>> {
 
         match self.receiver.recv_timeout(Duration::from_millis(timeout as u64)) {
@@ -122,9 +122,17 @@ impl MidiDevice {
 
 
     }
+*/
 
-    pub fn start(self, send: mpsc::Sender<DeviceEvent>) -> super::Result<mpsc::Sender<DeviceEvent>> {
-        todo!()
+    pub fn start(self, send: mpsc::Sender<DeckEvent>) -> super::Result<mpsc::Sender<DeviceEvent>> {
+        let (tx,rx) = mpsc::channel();
+        info!("midideck start");
+
+        thread::spawn(move || {
+            readwrite_thread(self, rx, send);
+        });
+
+        Ok(tx)
     }
 
 }
@@ -140,7 +148,36 @@ impl ButtonDeviceTrait for MidiDevice {
     
 }
 
+fn readwrite_thread(mut sd: MidiDevice, rx: Receiver<DeviceEvent>, tx: Sender<DeckEvent>) {
+    
+    debug!("readwrite_thread");
 
+    loop {
+        match sd.receiver.recv_timeout(Duration::from_millis(20)) {
+            Ok(DeviceEvent::RawMidi(m)) => {
+                match m {
+                    SendMidi::NoteOn(c, n, v) => {
+                        let nx = n;
+                        tx.send(DeckEvent::Device(DeviceEvent::ButtonDown(n as usize, 1.0)));
+                    },
+                    SendMidi::NoteOff(c, n, v) => {},
+                    SendMidi::PolyphonicKeyPressure(_, _, _) => {},
+                    SendMidi::ControlChange(_, _, _) => {},
+                    SendMidi::ProgramChange(_, _) => {},
+                    SendMidi::ChannelPressure(_, _) => {},
+                    SendMidi::PitchBendChange(_, _) => {},
+                    SendMidi::Other(_) => { },
+                }
+            },
+            Ok(e) => {
+                debug!("Other Event: {:?}", e);
+            }
+            Err(e) => {
+                // trace!("RecvTimeout");
+            },
+        }
+    }
+}
 
 // println!("MidiMessage: {:?}", mm);
 // let de = match mm {
@@ -203,7 +240,7 @@ pub fn open_midi(device: DeviceKind, ip_name: Option<String>, op_name: Option<St
         match MidiMessage::try_from(message) {
             Ok(mm) => { // handle_message(stamp, mm),
                 println!("MidiMessage: {:?}", mm);
-                if let Err(e) = tx.send(SendMidi::from(mm)) {
+                if let Err(e) = tx.send(DeviceEvent::RawMidi(SendMidi::from(mm))) {
                     error!("cannot send device event: {:?}", e);
                 }
             }
@@ -232,71 +269,3 @@ pub fn open_midi(device: DeviceKind, ip_name: Option<String>, op_name: Option<St
 
 
 
-
-// pub fn open_fire() -> Result<MidiDevice> {
-
-//     let mut midi_in  = MidiInput::new("Fire Input")?;
-//     midi_in.ignore(Ignore::None);
-
-//     let midi_out = MidiOutput::new("Fire Output")?;
-   
-//     let out_ports = midi_out.ports();
-//     let first_out = out_ports.iter()
-//         .find(|p| midi_out.port_name(&p).unwrap_or(String::new()).starts_with("FL STUDIO FIRE"));
-
-//     let in_ports = midi_in.ports();
-//     let first_in = in_ports.iter()
-//         .find(|p| midi_in.port_name(&p).unwrap_or(String::new()).starts_with("FL STUDIO FIRE"));
-    
-    
-//     if first_in.is_none() || first_out.is_none() {
-//         return Err(DeckError::Message(String::from("???")));
-//     }
-
-
-//     let (tx,rx) = mpsc::channel();
-//     let tx_move = tx.clone();
-        
-//     let mut conn_out = midi_out.connect(first_out.unwrap(), "midir-test")?;
-//     let mut conn_in  = midi_in.connect(first_in.unwrap(), "midir-test", move |stamp, message, _| {
-
-//         match MidiMessage::try_from(message) {
-//             Ok(mm) => handle_message(stamp, mm),
-//             Err(e) => println!("Error: {}", e)
-//         }
-        
-
-
-//         // println!("{:?}: {:?} (len = {})", stamp, message, message.len());
-//     }, ())?;
-
-
-
-    
-//     Ok(MidiDevice {
-//         midi_in: conn_in,
-//         midi_out: conn_out,
-//         receiver: rx,
-//         model: String::from("xxxx"),
-//     })
-
-// }
-
-
-
-// fn handle_message(ts: u64, msg: MidiMessage) {
-
-    
-//     match msg {
-
-//         MidiMessage::NoteOn(ch,n,v) => handle_note(true, ch, n, v),
-//         MidiMessage::NoteOff(ch,n,v) => handle_note(false, ch, n, v),
-//         _ => ()
-//     }
-
-// }
-
-
-// fn handle_note(onoff: bool, ch: Channel, n: Note, v: Velocity) {
-
-// }

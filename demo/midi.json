@@ -1,11 +1,16 @@
 {
-    
-    "midi_in": "nanoKONTROL2 SLIDER/KNOB",
-    "midi_out": "nanoKONTROL2 CTRL",
 
+    "xmidi_in": "nanoKONTROL2 SLIDER/KNOB",
+    "xmidi_out": "nanoKONTROL2 CTRL",
+    "midi_in": "Arturia MiniLab mkII",
+    "midi_out": "Arturia MiniLab mkII",
+
+
+    
     "deck": {
         "label": "Korg nanoKontrol",
         "wiring": {
+            "C3":  { "id": 48 },
             "A1":   { "id": 16, "kind": "cckey", "on_off_threshold": [ 20, 120 ] },
             "PLAY": { "id": 41, "kind": "cckey", "on_off_threshold": [ 0, 1 ] },
             "STOP": { "id": 42, "kind": "cckey", "on_off_threshold": [ 0, 1 ] }
@@ -13,7 +18,7 @@
         "setups": {
             "default": {
                 "mapping": {
-                    "A1": { "control": "donut", "state": "default" }
+                    "C3": { "control": "donut", "state": "default" }
                 }
             }
         },
