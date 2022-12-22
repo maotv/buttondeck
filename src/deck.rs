@@ -13,7 +13,7 @@ use std::rc::Rc;
 use std::str::FromStr;
 
 
-use crate::{BtnRef, ButtonColor, ButtonRef, StateRef2};
+use crate::{ButtonRef, ButtonColor, StateRef2};
 use crate::Button;
 use crate::DeckError;
 use crate::device::ButtonDevice;
@@ -75,7 +75,7 @@ impl Default for SetupRef {
 // }
 
 // pub struct DeckEvent<'a> {
-//     button: &'a BtnRef
+//     button: &'a ButtonRef
 // }
 
 
@@ -124,7 +124,8 @@ impl Clone for ButtonSetup {
 #[derive(Clone)]
 pub struct ButtonMapping {
     pub key:    PhysicalKey,
-    pub button: BtnRef
+    pub button: ButtonRef,
+    pub state:  Option<StateRef2>
 }
 
 
@@ -144,7 +145,7 @@ pub enum FnArg {
     Bool(bool),
     Int(isize),
     Float(f32),
-    Button(BtnRef),
+    Button(ButtonRef),
 }
 
 
@@ -165,7 +166,7 @@ impl Display for FnArg {
             FnArg::Bool(b) => write!(fm, "FnArg::Bool({})", b),
             FnArg::Int(i) => write!(fm, "FnArg::Int({})", i),
             FnArg::Float(f) => write!(fm, "FnArg::Float({})", f),
-            FnArg::Button(b) => write!(fm, "FnArg::Button({})", b.id),
+            FnArg::Button(b) => write!(fm, "FnArg::Button({:?})", b),
             FnArg::None => write!(fm, "FnArg::None")
         }
     }
@@ -196,7 +197,7 @@ pub struct ButtonDeck
     // The memory arena where all defined buttons live
     pub (crate) button_arena: Vec<Button>,
 
-    // mapping from key-index to Phys & BtnRef
+    // mapping from key-index to Phys & ButtonRef
     pub (crate) current_key_map: Vec<Option<ButtonMapping>>,
 
     // 
@@ -204,7 +205,7 @@ pub struct ButtonDeck
 
 
     // buttons by name
-    pub (crate) button_map: HashMap<String,BtnRef>,
+    pub (crate) button_map: HashMap<String,ButtonRef>,
 
     // the current, active setup
     pub (crate) current_setup: usize,
@@ -367,7 +368,8 @@ impl ButtonDeck
 
     fn init_button(&mut self, mapping: &ButtonMapping) -> Result<()> {
 
-        debug!("init_button {:?} {}", mapping.key, mapping.button.id);
+        debug!("init_button {:?} {:?}", mapping.key, mapping.button);
+
         self.current_key_map[mapping.key.id] = Some(mapping.clone());
         {
             let bb = self.button_mut(&mapping.button)?;
@@ -375,9 +377,9 @@ impl ButtonDeck
 
             // let km = self.wiring.get_mut(mapping.key.id);
 
-            if let Some(bs) = &mapping.button.state {
+            if let Some(bs) = &mapping.state {
                 debug!("=> Switch state to {:?}", bs);
-                bb.switch_state(bs);
+                bb.switch_state2(bs);
             }
         }
 
@@ -386,7 +388,7 @@ impl ButtonDeck
     }
 
 
-    fn decorate_button(&self, btn: &BtnRef) -> Result<()> {
+    fn decorate_button(&self, btn: &ButtonRef) -> Result<()> {
 
         debug!("decorate_button {:?}", &btn);
 
@@ -409,7 +411,7 @@ impl ButtonDeck
         Ok(())
     }
 
-    pub fn toggle_button_state(&mut self, rb: &BtnRef) -> Result<()> {
+    pub fn toggle_button_state(&mut self, rb: &ButtonRef) -> Result<()> {
         let b = self.button_mut(rb)?;
         if b.toggle_state() {
             self.decorate_button(rb)?;
@@ -431,7 +433,7 @@ impl ButtonDeck
     pub fn set_button_color(&mut self, button: ButtonRef, state: StateRef2, color: ButtonColor) {
     }
 
-    pub fn set_button_color2(&mut self, button: &BtnRef, state: &str, color: ButtonColor) {
+    pub fn set_button_color2(&mut self, button: &ButtonRef, state: &str, color: ButtonColor) {
     }
 
 
@@ -459,7 +461,7 @@ impl ButtonDeck
 
 
 
-    fn call_fn(&mut self, fr: &FnRef, br: &BtnRef) {
+    fn call_fn(&mut self, fr: &FnRef, br: &ButtonRef) {
 
         let opt_func = self.functions.get(fr.id).cloned(); // .unwrap().clone();
         let arg = FnArg::Button(br.clone());
@@ -471,7 +473,7 @@ impl ButtonDeck
 
     }
 
-    pub fn button_ref(&self, button: &str) -> Option<BtnRef> {
+    pub fn button_ref(&self, button: &str) -> Option<ButtonRef> {
         self.button_map.get(button).cloned()
 //        self.button_arena.iter().find(|b| b.reference.name == button)
     }
@@ -484,28 +486,38 @@ impl ButtonDeck
                 Ok(*index)
             },
             ButtonRef::Name(n) => {
-                let rb = self.button_map.get(n).cloned().ok_or(DeckError::InvalidRef)?;
-                Ok(rb.id)
+                match self.button_map.get(n).cloned().ok_or(DeckError::InvalidRef)? {
+                    ButtonRef::Id(_, id) => Ok(id),
+                    ButtonRef::Name(_) => Err(DeckError::InvalidRef),
+                }
             },
         }
     }
 
 
-    fn button<R: AsRef<BtnRef>>(&self, r: R) -> Result<&Button> {
-        self.button_arena.get(r.as_ref().id).ok_or(DeckError::InvalidRef)
+    fn button<R: AsRef<ButtonRef>>(&self, r: R) -> Result<&Button> {
+        self.button_arena
+            .get(self.button_id(r.as_ref())?)
+            .ok_or(DeckError::InvalidRef)
     }
 
-    fn buttonx(&self, r: &ButtonRef) -> Result<&Button> {
+    // fn buttonx(&self, r: &ButtonRef) -> Result<&Button> {
 
-        let y = self.button_arena
-            .get(self.button_id(r)?)
-            .ok_or(DeckError::InvalidRef);
+    //     let y = self.button_arena
+    //         .get(self.button_id(r)?)
+    //         .ok_or(DeckError::InvalidRef);
 
-        y
-    }
+    //     y
+    // }
 
-    fn button_mut<R: AsRef<BtnRef>>(&mut self, r: R) -> Result<&mut Button> {
-        self.button_arena.get_mut(r.as_ref().id).ok_or(DeckError::InvalidRef)
+    fn button_mut<R: AsRef<ButtonRef>>(&mut self, r: R) -> Result<&mut Button> {
+
+        let id = self.button_id(r.as_ref())?;
+
+        self.button_arena
+            .get_mut(id)
+            .ok_or(DeckError::InvalidRef)
+
     }
 
     fn on_button_down(&mut self, index: usize) -> Result<()> {
@@ -560,6 +572,7 @@ impl ButtonDeck
 
 
         if let Some(br) = btn {
+
             let opt_fr = self.button(&br)?.effective_button_up().cloned();
             
             if let Some(fr) = opt_fr {

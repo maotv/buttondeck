@@ -1,4 +1,4 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, FnArg};
+use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, FnArg};
 use log::{error, warn, info};
 
 type Result<T> = std::result::Result<T,DeckError>;

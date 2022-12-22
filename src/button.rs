@@ -2,7 +2,9 @@ use std::{path::{PathBuf, Path}, str::FromStr};
 
 use crate::{device::PhysicalKey, deck::{FnRef, SetupRef}, DeckError};
 
+type Result<T> = std::result::Result<T,DeckError>;
 
+#[derive(Clone,Debug)]
 pub enum StateRef2 {
     Id(usize,usize),
     Name(String),
@@ -25,10 +27,20 @@ impl Default for StateRef {
 }
 
 
+#[derive(Clone,Debug)]
 pub enum ButtonRef {
     // owner, index
     Id(usize,usize),
     Name(String)
+}
+
+impl ButtonRef {
+    pub fn id(&self) -> Result<usize> {
+        match self {
+            ButtonRef::Id(_, id) => Ok(*id),
+            ButtonRef::Name(_) => Err(DeckError::InvalidRef),
+        }
+    }
 }
 
 impl From<&str> for ButtonRef {
@@ -37,32 +49,39 @@ impl From<&str> for ButtonRef {
     }
 }
 
+impl AsRef<ButtonRef> for ButtonRef {
+    fn as_ref(&self) -> &ButtonRef {
+        self
+    }
+}
+
+
 // impl <'a> AsRef<ButtonRef<'a>> for String {
 //     fn as_ref(&self) -> ButtonRef<'a> {
 //         ButtonRef::Name(&self)
 //     }
 // }
 
-#[derive(Clone,Debug)]
-pub struct BtnRef {
-    pub (crate) id: usize,
-    pub (crate) state: Option<StateRef>
-}
+// #[derive(Clone,Debug)]
+// pub struct ButtonRef {
+//     pub (crate) id: usize,
+//     pub (crate) state: Option<StateRef>
+// }
 
-impl BtnRef {
-    pub (crate) fn clone_with_state(&self, state: Option<StateRef>) -> Self {
-        BtnRef { 
-            id: self.id,
-            state
-        }
-    }
-}
+// impl ButtonRef {
+//     pub (crate) fn clone_with_state(&self, state: Option<StateRef>) -> Self {
+//         ButtonRef { 
+//             id: self.id,
+//             state
+//         }
+//     }
+// }
 
-impl AsRef<BtnRef> for BtnRef {
-    fn as_ref(&self) -> &BtnRef {
-        self
-    }
-}
+// impl AsRef<ButtonRef> for ButtonRef {
+//     fn as_ref(&self) -> &ButtonRef {
+//         self
+//     }
+// }
 
 
 pub struct Button
@@ -70,7 +89,7 @@ pub struct Button
     // pub (crate) newrwf: ButtonRef,
 
     // a private, unique id
-    pub (crate) reference:  BtnRef,
+    pub (crate) reference:  ButtonRef,
 
     pub (crate) name:  String,
     pub (crate) label: String,
@@ -81,7 +100,7 @@ pub struct Button
 
     pub (crate) default_state: usize,
     pub (crate) current_state: usize,
-    pub (crate) states: Vec<ButtonState>,
+    pub (crate) states: Vec<(String,ButtonState)>,
 
 }
 
@@ -103,12 +122,18 @@ impl Button {
     }
 
     pub fn current_state<'a>(&'a self) -> &'a ButtonState {
-        self.states.get(self.current_state).unwrap_or_else(|| self.states.get(self.default_state).expect("must not go wrong") )
+
+        let cs = self.states.get(self.current_state)
+            .expect("current_state must always be present");
+
+        &cs.1
+
+//        self.states.get(self.current_state).unwrap_or_else(|| self.states.get(self.default_state).expect("must not go wrong") )
     }
 
     pub fn get_state_ref(&self, name: &str) -> Option<StateRef> {
-        self.states.iter().find(|s| s.reference.name == name)
-            .map(|n| n.reference.clone())
+        self.states.iter().find(|(n,s)| n == name)
+            .map(|(_,s)| s.reference.clone())
     }
 
 
@@ -125,6 +150,40 @@ impl Button {
         self.current_state = next;
 
         next != last
+
+    }
+
+    pub fn switch_state2(&mut self, next_state: &StateRef2) -> bool 
+    {
+        let opt_next = match next_state {
+            StateRef2::Id(_, id) => {
+                Some(*id)
+            },
+            StateRef2::Name(name) => {
+                let r = self.states.iter()
+                    .find(|(n,s) | name==n )
+                    .map(|(n,r)| r.reference.id);
+                    r
+
+            },
+        };
+
+
+        // let next = match self.states.get(next_state.id) {
+        //     Some(s) => next_state.id,
+        //     None => self.current_state
+        // };
+
+        if let Some(next) = opt_next {
+            
+            let last = self.current_state;
+            self.current_state = next;
+    
+            next != last
+        } else {
+            false
+        }
+
 
     }
 

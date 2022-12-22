@@ -1,4 +1,4 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg};
+use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg};
 use log::{error, warn, info};
 use std::{thread, time::Duration};
 

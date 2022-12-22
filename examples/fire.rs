@@ -1,4 +1,4 @@
-use buttondeck::{DeckError, ButtonDeck, BtnRef, ButtonFn, ButtonDeckBuilder, DeckEvent, FnArg};
+use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeckEvent, FnArg};
 use log::{error, warn, info};
 
 

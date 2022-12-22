@@ -4,9 +4,9 @@ use hidapi::HidApi;
 use indexmap::IndexMap;
 use serde_derive::{Serialize,Deserialize};
 
-use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}};
+use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}, StateRef2};
 
-use super::{DeckError, ButtonDeck, BtnRef, device::StreamDeckDevice, ButtonFn};
+use super::{DeckError, ButtonDeck, ButtonRef, device::StreamDeckDevice, ButtonFn};
 
 use log::{error, debug, warn, info, trace};
 
@@ -86,7 +86,7 @@ struct SetupTemplate {
 #[derive(Serialize,Deserialize)]
 struct ReferenceTemplate {
     control: String,
-    state:  Option<String>
+    state:   Option<String>
 }
 
 
@@ -219,7 +219,7 @@ impl ButtonDeckBuilder {
 struct BuilderData<'a> {
     builder:     &'a ButtonDeckBuilder,
     setup_refs:  Vec<Prep<'a,SetupRef,SetupTemplate>>,
-    button_refs: Vec<Prep<'a,BtnRef,ButtonTemplate>>,
+    button_refs: Vec<Prep<'a,ButtonRef,ButtonTemplate>>,
     function_refs: Vec<FnRef>,
 }
 
@@ -256,6 +256,7 @@ struct Prep<'a,R,T> {
 
 fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeckTemplate>, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck> {
 
+    let deckid = 42;
 
     // debug!("setup::build_buttondeck {:?} with dir {:?}", &device.model(), home_folder);
     let device: &dyn ButtonDeviceTrait = match &any_device {
@@ -302,11 +303,11 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         })
         .collect();
 
-    let button_refs: Vec<Prep<BtnRef,ButtonTemplate>> = template.controls.iter().enumerate()
+    let button_refs: Vec<Prep<ButtonRef,ButtonTemplate>> = template.controls.iter().enumerate()
         .map(|(i,(n,t))| {
             Prep {
                 name: n,
-                reference: BtnRef { id: i, state: None },
+                reference: ButtonRef::Id(deckid, i), //  { id: i, state: None },
                 template:t,
             }
         })
@@ -340,8 +341,8 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
     // let arena: Vec<Button> = template.controls.iter()
     //     .map(|(n,b)| build_button(&data, n, b)).collect();
 
-    let button_map: HashMap<String,BtnRef> = button_arena.iter().enumerate()
-        .map(|(i,b)| (b.name.clone(), BtnRef{ id: i, state: None }) ).collect();
+    let button_map: HashMap<String,ButtonRef> = button_arena.iter().enumerate()
+        .map(|(i,b)| (b.name.clone(), ButtonRef::Id(deckid, i)) ).collect();
 
 //    let setup_map: HashMap<String,ButtonSetup> = HashMap::new();
     let mut setup_arena: Vec<ButtonSetup> = Vec::new(); // HashMap::new();
@@ -358,7 +359,7 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
 
         let st = prep.template;
 
-        // let mut controls: HashMap<PhysicalKey,BtnRef> = HashMap::new();
+        // let mut controls: HashMap<PhysicalKey,ButtonRef> = HashMap::new();
         let mut mapping = Vec::new();
 
         for (pn,rt) in &st.mapping {
@@ -369,13 +370,18 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
 
             if let Some(br) = b {
 
-                if let Some(button) = button_arena.get(br.id) {
+                if let Some(button) = button_arena.get(br.id()?) {
 
                     let s = rt.state.clone().and_then(|n| button.get_state_ref(&n) );
+                    let s2 = s.map(|x| StateRef2::Id(0, x.id));
                     // let s = button.get_state_ref(&rt.state);
 
                     if let Some(pk) = p {
-                        mapping.push(ButtonMapping { key: pk.clone(), button: br.clone_with_state(s) })
+                        mapping.push(ButtonMapping { 
+                            key: pk.clone(), 
+                            button: br.clone(),
+                            state: s2
+                        })
                     }
 
                 }
@@ -475,12 +481,12 @@ fn build_button(data: &BuilderData, index: usize) -> Result<Button> {
     // let bsfinal: Vec<ButtonState> = Vec::new();
     // let bsref = bsfinal.as_ptr() as usize;
 
-    let states: Vec<ButtonState> = if state_prep.is_empty() {
-        vec! [ ButtonState::default() ]
+    let states: Vec<(String,ButtonState)> = if state_prep.is_empty() {
+        vec! [ (String::from("default"), ButtonState::default()) ]
     } else {
         state_prep.iter()
             .map(|p| {
-                ButtonState { 
+                (String::from(p.name), ButtonState { 
                     reference: p.reference.clone(),
                     // name: String::from(n),
                     color: ButtonColor::from_option_string(&p.template.color), 
@@ -489,7 +495,7 @@ fn build_button(data: &BuilderData, index: usize) -> Result<Button> {
                     on_button_up: data.get_button_fn_ref(&p.template.on_up).cloned(),
                     switch_button_state: state_for_opt_name(&state_prep, &p.template.switch_button_state), //  s.switch_button_state.clone(),
                     switch_deck_setup: data.setup_for_opt_name(&p.template.switch_deck_setup),
-                }
+                })
             })
             .collect()
     };
