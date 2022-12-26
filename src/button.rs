@@ -7,10 +7,21 @@ type Result<T> = std::result::Result<T,DeckError>;
 #[derive(Clone,Debug)]
 pub enum StateRef2 {
     Id(usize,usize),
-    Name(String),
-
+    Name(String)
 }
 
+impl From<&str> for StateRef2 {
+    fn from(s: &str) -> Self {
+        StateRef2::Name(String::from(s))
+    }
+}
+
+
+impl AsRef<StateRef2> for StateRef2 {
+    fn as_ref(&self) -> &StateRef2 {
+        self
+    }
+}
 
 
 
@@ -27,33 +38,57 @@ impl Default for StateRef {
 }
 
 
-#[derive(Clone,Debug)]
-pub enum ButtonRef {
-    // owner, index
-    Id(usize,usize),
-    Name(String)
+#[derive(Clone,Copy,Debug)]
+pub struct ButtonId {
+    owner: usize,
+    index: usize
 }
 
-impl ButtonRef {
-    pub fn id(&self) -> Result<usize> {
-        match self {
-            ButtonRef::Id(_, id) => Ok(*id),
-            ButtonRef::Name(_) => Err(DeckError::InvalidRef),
-        }
+
+
+impl ButtonId {
+    pub fn new(owner: usize, index: usize) -> Self {
+        ButtonId { owner, index }
+    }
+
+    pub fn id(&self) -> usize {
+        self.index
     }
 }
 
-impl From<&str> for ButtonRef {
-    fn from(s: &str) -> Self {
-        ButtonRef::Name(String::from(s))
-    }
-}
+// #[derive(Clone,Debug)]
+// pub enum ButtonRef {
+//     // owner, index
+//     Id(usize,usize),
+//     Name(String)
+// }
 
-impl AsRef<ButtonRef> for ButtonRef {
-    fn as_ref(&self) -> &ButtonRef {
-        self
-    }
-}
+// impl ButtonRef {
+//     pub fn id(&self) -> Result<usize> {
+//         match self {
+//             ButtonRef::Id(_, id) => Ok(*id),
+//             ButtonRef::Name(_) => Err(DeckError::InvalidRef),
+//         }
+//     }
+
+
+// }
+
+// impl From<&str> for ButtonRef {
+//     fn from(s: &str) -> Self {
+//         ButtonRef::Name(String::from(s))
+//     }
+// }
+
+// impl AsRef<ButtonRef> for ButtonRef {
+//     fn as_ref(&self) -> &ButtonRef {
+//         self
+//     }
+// }
+
+
+
+
 
 
 // impl <'a> AsRef<ButtonRef<'a>> for String {
@@ -89,7 +124,7 @@ pub struct Button
     // pub (crate) newrwf: ButtonRef,
 
     // a private, unique id
-    pub (crate) reference:  ButtonRef,
+    pub (crate) reference:  usize,
 
     pub (crate) name:  String,
     pub (crate) label: String,
@@ -128,12 +163,17 @@ impl Button {
 
         &cs.1
 
-//        self.states.get(self.current_state).unwrap_or_else(|| self.states.get(self.default_state).expect("must not go wrong") )
     }
 
     pub fn get_state_ref(&self, name: &str) -> Option<StateRef> {
         self.states.iter().find(|(n,s)| n == name)
             .map(|(_,s)| s.reference.clone())
+    }
+
+    pub fn get_state_ref2(&self, name: &str) -> Option<StateRef2> {
+        let bid = self.reference;
+        self.states.iter().enumerate().find(|(i,(n,s))| n == name)
+            .map(|(i,s)| StateRef2::Id(bid, i))
     }
 
 

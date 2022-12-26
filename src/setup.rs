@@ -4,9 +4,9 @@ use hidapi::HidApi;
 use indexmap::IndexMap;
 use serde_derive::{Serialize,Deserialize};
 
-use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}, StateRef2};
+use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}, StateRef2, ButtonId};
 
-use super::{DeckError, ButtonDeck, ButtonRef, device::StreamDeckDevice, ButtonFn};
+use super::{DeckError, ButtonDeck, device::StreamDeckDevice, ButtonFn};
 
 use log::{error, debug, warn, info, trace};
 
@@ -219,7 +219,7 @@ impl ButtonDeckBuilder {
 struct BuilderData<'a> {
     builder:     &'a ButtonDeckBuilder,
     setup_refs:  Vec<Prep<'a,SetupRef,SetupTemplate>>,
-    button_refs: Vec<Prep<'a,ButtonRef,ButtonTemplate>>,
+    button_refs: Vec<Prep<'a,ButtonId,ButtonTemplate>>,
     function_refs: Vec<FnRef>,
 }
 
@@ -303,11 +303,11 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         })
         .collect();
 
-    let button_refs: Vec<Prep<ButtonRef,ButtonTemplate>> = template.controls.iter().enumerate()
+    let button_refs: Vec<Prep<ButtonId,ButtonTemplate>> = template.controls.iter().enumerate()
         .map(|(i,(n,t))| {
             Prep {
                 name: n,
-                reference: ButtonRef::Id(deckid, i), //  { id: i, state: None },
+                reference: ButtonId::new(deckid, i), //  { id: i, state: None },
                 template:t,
             }
         })
@@ -341,8 +341,8 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
     // let arena: Vec<Button> = template.controls.iter()
     //     .map(|(n,b)| build_button(&data, n, b)).collect();
 
-    let button_map: HashMap<String,ButtonRef> = button_arena.iter().enumerate()
-        .map(|(i,b)| (b.name.clone(), ButtonRef::Id(deckid, i)) ).collect();
+    let button_map: HashMap<String,ButtonId> = button_arena.iter().enumerate()
+        .map(|(i,b)| (b.name.clone(), ButtonId::new(deckid, i)) ).collect();
 
 //    let setup_map: HashMap<String,ButtonSetup> = HashMap::new();
     let mut setup_arena: Vec<ButtonSetup> = Vec::new(); // HashMap::new();
@@ -370,7 +370,7 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
 
             if let Some(br) = b {
 
-                if let Some(button) = button_arena.get(br.id()?) {
+                if let Some(button) = button_arena.get(br.id()) {
 
                     let s = rt.state.clone().and_then(|n| button.get_state_ref(&n) );
                     let s2 = s.map(|x| StateRef2::Id(0, x.id));
@@ -419,7 +419,7 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         functions: functionvec,
         current_key_map: ccm,
         button_arena,
-        button_map,
+//         button_map,
         current_setup: 0,
         setup_arena,
         self_sender: bdtx,
@@ -457,7 +457,7 @@ fn build_button(data: &BuilderData, index: usize) -> Result<Button> {
     let state_prep: Vec<Prep<StateRef,StateTemplate>> = state_templates.iter().enumerate()
         .map(|(i,(n,t))| Prep {
             name: n,
-            reference: StateRef { id: i, name: n.clone() } ,
+            reference: StateRef { id: i, name: String::from(n) } ,
             template: t,
         }).collect();
 
@@ -502,7 +502,7 @@ fn build_button(data: &BuilderData, index: usize) -> Result<Button> {
 
     Ok(Button {
         // button unique id
-        reference: prep.reference.clone(),
+        reference: prep.reference.id(),
         
         name: String::from(n),
         label: bt.label.clone().unwrap_or_else(|| String::from(n)),

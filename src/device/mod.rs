@@ -5,7 +5,7 @@ mod midideck;
 use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
-use crate::ButtonRef;
+// use crate::ButtonRef;
 use crate::ButtonDeck;
 use crate::button::ButtonImage;
 

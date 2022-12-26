@@ -117,8 +117,8 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
             },
             Err(e) => {
                 error!("Btn Error: {:?}", e);
+                std::thread::sleep(Duration::from_millis(1000))
                 // FIXME try reconnect on error
-    //             return Err(e.into())
             }
         }
 
@@ -126,11 +126,11 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
             match rx.try_recv() {
                 Ok(DeviceEvent::SetImage(device_index,image)) => {
                     debug!("SetImage");
-                    sd.deck.set_button_file((device_index+1) as u8, &image.path.to_string_lossy(),&ImageOptions::default());
+                    sd.deck.set_button_file((device_index) as u8, &image.path.to_string_lossy(),&ImageOptions::default());
                 },
                 Ok(DeviceEvent::SetColor(device_index,color)) => {
                     debug!("SetColor");
-                    sd.deck.set_button_rgb((device_index+1) as u8, &to_colour(&color));
+                    sd.deck.set_button_rgb((device_index) as u8, &to_colour(&color));
                 },
                 Ok(ev) => {
                     error!("Other event {:?}",ev);

@@ -22,7 +22,7 @@ pub use deck::ButtonSetup;
 pub use deck::ButtonDeckSender;
 
 pub use button::Button;
-pub use button::ButtonRef;
+pub use button::ButtonId;
 pub use button::StateRef2;
 pub use button::ButtonColor;
 pub use button::ButtonState;

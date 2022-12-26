@@ -1,16 +1,20 @@
-use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg};
+use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg, StateRef2, ButtonId};
 use log::{error, warn, info};
-use std::{thread, time::Duration};
+use std::{thread, time::Duration, io, sync::{atomic::{AtomicIsize, AtomicUsize, Ordering}, Arc}, path::Path};
 
 type Result<T> = std::result::Result<T,DeckError>;
 
 
-fn customfunc(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
+
+fn mute_notify(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
+    
     warn!("Customfunc! {}", e);
+    let bid = d.button_id_from_name("mute")?;
+
     if e.as_bool() {
-        // d.set_button_state("mute", "on")
+        d.set_button_state(bid, &StateRef2::from("on"))
     } else {
-        // d.set_button_state("mute", "off")
+        d.set_button_state(bid, &StateRef2::from("off"))
     }
     
     Ok(())
@@ -20,7 +24,7 @@ fn toggle_mute(d: &mut ButtonDeck, arg: FnArg) -> Result<()> {
     info!("Mute Button {}", arg);
     match arg {
         FnArg::Button(rb) => {
-            d.toggle_button_state(&rb)?
+            d.toggle_button_state(rb)?
         }
         FnArg::Bool(b) => {
             
@@ -49,12 +53,15 @@ fn main_with_result() -> Result<()> {
 
     info!("Hello, world!");
 
+    let mute_state  = Arc::new(AtomicUsize::new(0));
+    let clone_state = Arc::clone(&mute_state);
+
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
     let mut deck = ButtonDeckBuilder::new(DeviceKind::StreamDeck)
         .with_config("demo/panoo.json")
-        .with_function("mute", customfunc )
+        .with_function("mute_notify", mute_notify )
         .with_function("toggle_mute", toggle_mute )
         .build()?;
 
@@ -65,7 +72,7 @@ fn main_with_result() -> Result<()> {
     let bsender = deck.get_sender();
 
     thread::spawn(move || {
-        random_message_thread(bsender);
+        random_message_thread(bsender, clone_state);
     });
 
     // run with current thread
@@ -77,14 +84,39 @@ fn main_with_result() -> Result<()> {
 
 
 
-fn random_message_thread(sender: ButtonDeckSender) {
+fn random_message_thread(sender: ButtonDeckSender, mute_state: Arc<AtomicUsize>) {
 
     let mut mute = false;
 
+    
+//     let p: Path = Path::from("mao");
+    
     loop {
-        sender.send(DeckEvent::FnCall("mute".to_owned(), FnArg::Bool(mute)));
-        mute = !mute;
-        thread::sleep(Duration::from_millis(10000));
+
+        let mut user_input = String::new();
+
+        let stdin = io::stdin(); // We get `Stdin` here.
+        stdin.read_line(&mut user_input);
+        let clean_input = user_input.trim();
+    
+        println!("input <{}>", clean_input);
+     
+        match clean_input {
+            "m" => {
+                if mute_state.load(Ordering::SeqCst) == 0 {
+                    mute_state.store(1, Ordering::SeqCst);
+                    sender.send(DeckEvent::FnCall("mute_notify".to_owned(), FnArg::Bool(true)));
+                } else {
+                    mute_state.store(0, Ordering::SeqCst);
+                    sender.send(DeckEvent::FnCall("mute_notify".to_owned(), FnArg::Bool(false)));
+                }
+                println!("mute <{:?}>", mute_state);
+            },
+            _ => {
+                println!("input <{}>", clean_input);
+            }
+        }
+
     }
 
 }
