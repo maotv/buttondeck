@@ -12,9 +12,9 @@ fn mute_notify(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
     let bid = d.button_id_from_name("mute")?;
 
     if e.as_bool() {
-        d.set_button_state(bid, &StateRef2::from("on"))
+        d.set_button_state_with_id(bid, &StateRef2::from("on"))
     } else {
-        d.set_button_state(bid, &StateRef2::from("off"))
+        d.set_button_state_with_id(bid, &StateRef2::from("off"))
     }
     
     Ok(())

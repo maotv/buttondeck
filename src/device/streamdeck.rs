@@ -38,6 +38,7 @@ pub struct StreamDeckDevice {
     
     deck: StreamDeck,
     btn_state: [u8;256],
+    index_offset: usize,
     // btn_names: [Option<ButtonName>;256],
     model: String
 
@@ -52,6 +53,7 @@ impl StreamDeckDevice {
         StreamDeckDevice {  
             deck: sd,
             btn_state: [0;256],
+            index_offset: 1,
             // btn_names: [None;256],
             model
         }
@@ -105,9 +107,9 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
                 debug!("Btn: {:?}", b);
                 for i in 0..b.len() {
                     if sd.btn_state[i] == 0 && b[i] == 1 {
-                        tx.send(DeckEvent::Device(DeviceEvent::ButtonDown(i, 1.0)));
+                        tx.send(DeckEvent::Device(DeviceEvent::ButtonDown(i+sd.index_offset, 1.0)));
                     } else  if sd.btn_state[i] == 1 && b[i] == 0 {
-                        tx.send(DeckEvent::Device(DeviceEvent::ButtonUp(i)));
+                        tx.send(DeckEvent::Device(DeviceEvent::ButtonUp(i+sd.index_offset)));
                     }
                     sd.btn_state[i] = b[i];
                 }
@@ -147,7 +149,7 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
 
 
 
-
+/* 
 fn read_button_events(sd: &mut StreamDeckDevice) -> Result<Vec<DeviceEvent>> {
 
     let btns = sd.deck.read_buttons(Some(Duration::from_millis(100)));
@@ -177,7 +179,7 @@ fn read_button_events(sd: &mut StreamDeckDevice) -> Result<Vec<DeviceEvent>> {
     Ok(events)
 
 }
-
+*/
 
 
 

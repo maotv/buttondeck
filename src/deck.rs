@@ -424,7 +424,13 @@ impl ButtonDeck
         Ok(())
     }
 
-    pub fn set_button_state(&mut self, button: ButtonId, state: &StateRef2) 
+    pub fn set_button_state(&self, name: &str, state: &str) -> Result<()> {
+        let bid = self.button_id_from_name(name)?;
+        Ok(())
+    }
+
+
+    pub fn set_button_state_with_id(&mut self, button: ButtonId, state: &StateRef2) 
     {
 
 //         let bref = button.
