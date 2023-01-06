@@ -4,6 +4,7 @@ mod error;
 mod device;
 mod setup;
 mod hardware;
+mod sx;
 
 pub use error::DeckError;
 pub use device::ButtonDeviceTrait;

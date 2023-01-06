@@ -3,6 +3,7 @@ use hidapi::HidApi;
 use log::error;
 use log::{debug, warn};
 
+use std::any::Any;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -219,7 +220,9 @@ pub struct ButtonDeck<D>
     // all setups by name
     pub (crate) setup_arena: Vec<ButtonSetup>,
 
-    pub data: Option<D>
+    pub data: Option<D>,
+
+    pub other: Option<Box<dyn Any>>
 
     // receiver: mpsc::Receiver<DeviceEvent>
 
@@ -229,34 +232,52 @@ pub struct ButtonDeck<D>
 impl <D> ButtonDeck<D>
 {
 
-    // pub fn new() -> Self {
-    //     ButtonDeck {
+    pub fn with_other<X>(&mut self, o: X) 
+        where X: Sized + Send + Sync + 'static
+    {
+        self.other = Some(Box::new(o));
+    }
 
-    //         deckid: 42,
-    //         hidapi: None, // will be filled later
 
-    //         device: Some(any_device),
-    //         // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
-    //         folder: PathBuf::from(builder.home_path()),
-    //         wiring: phys,
-    //         functions: functionvec,
-    //         current_key_map: ccm,
-    //         button_arena,
-    // //         button_map,
-    //         current_setup: 0,
-    //         setup_arena,
+    pub fn new() -> Self {
+
+        let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
+        let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
+    
+        ButtonDeck {
+
+            deckid: 42,
+
+            hidapi: None, // will be filled later
+
+            device: None,
+            // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
+            folder: PathBuf::default(),
+
+            wiring: vec![],
+
+            functions: vec![],
+
+            current_key_map: vec![],
+            button_arena: vec![],
+    //         button_map,
+            current_setup: 0,
+
+            setup_arena: vec![],
             
-    //         // dummy!
-    //         device_event_sender: dvtx,
-    //         // dummy!
-    //         deck_event_sender: bdtx,
-    //         // dummy!
-    //         deck_event_receiver: Some(bdrx),
+            // dummy!
+            device_event_sender: dvtx,
+            // dummy!
+            deck_event_sender: bdtx,
+            // dummy!
+            deck_event_receiver: Some(bdrx),
 
-    //         data: builder.data.take()
+            data: None,
+            
+            other: None,
 
-    //     }
-    // }
+        }
+    }
 
 
     pub fn initialize(&mut self) -> Result<()> {

@@ -547,8 +547,10 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
         // dummy!
         deck_event_receiver: Some(bdrx),
 
-        data: builder.data.take()
+        data: builder.data.take(),
         // deckid: todo!(),
+
+        other: None
     })
 
 }
