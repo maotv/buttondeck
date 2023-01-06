@@ -26,3 +26,18 @@ pub use button::ButtonId;
 pub use button::StateRef2;
 pub use button::ButtonColor;
 pub use button::ButtonState;
+
+
+#[macro_export]
+macro_rules! elog {
+    ($msg:expr, $expression:expr) => {
+        if let Err(e) = $expression {
+            error!("{}: {}", $msg, e)
+        }
+    };
+    ($expression:expr) => {
+        if let Err(e) = $expression {
+            error!("{}", e)
+        }
+    };
+}

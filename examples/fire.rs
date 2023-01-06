@@ -23,7 +23,7 @@ fn main_with_result() -> Result<(),DeckError> {
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(buttondeck::DeviceKind::AkaiFire)
+    let mut deck = ButtonDeckBuilder::<()>::new(buttondeck::DeviceKind::AkaiFire)
         .with_config("fire/deck.json")
         .build()?;
 

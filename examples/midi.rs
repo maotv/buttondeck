@@ -21,7 +21,7 @@ fn main_with_result() -> Result<(),DeckError> {
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(DeviceKind::GenericMidi)
+    let mut deck = ButtonDeckBuilder::<()>::new(DeviceKind::GenericMidi)
         .with_config("demo/midi.json")
         .with_function("one", |a,b| { Ok(()) } )
         .build()?;

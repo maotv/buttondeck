@@ -153,7 +153,7 @@ impl Button {
             StateRef { id: 0, name: String::new() }
         };
 
-        self.switch_state(&next)
+        self.switch_state_xxx(&next)
     }
 
     pub fn current_state<'a>(&'a self) -> &'a ButtonState {
@@ -176,9 +176,16 @@ impl Button {
             .map(|(i,s)| StateRef2::Id(bid, i))
     }
 
+    pub fn switch_state(&mut self, next_state: &str) -> bool {
+        if let Some(s) = self.get_state_ref2(next_state) {
+            self.switch_state2(&s)
+        } else {
+            false
+        }
+    }
 
 
-    pub fn switch_state(&mut self, next_state: &StateRef) -> bool 
+    pub fn switch_state_xxx(&mut self, next_state: &StateRef) -> bool 
     {
 
         let next = match self.states.get(next_state.id) {
@@ -236,7 +243,7 @@ impl Button {
         };
 
         if let Some(sn) = b {
-            self.switch_state(&sn)
+            self.switch_state_xxx(&sn)
         } else {
             false
         }

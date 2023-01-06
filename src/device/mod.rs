@@ -16,6 +16,7 @@ use self::midideck::SendMidi;
 pub use self::streamdeck::StreamDeckDevice;
 pub use self::streamdeck::open_streamdeck;
 pub use self::midideck::open_midi;
+pub use self::streamdeck::discover_streamdeck;
 
 type Result<T> = std::result::Result<T,DeckError>;
 

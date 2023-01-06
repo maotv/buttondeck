@@ -6,7 +6,7 @@ type Result<T> = std::result::Result<T,DeckError>;
 
 
 
-fn mute_notify(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
+fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
     
     warn!("Customfunc! {}", e);
     let bid = d.button_id_from_name("mute")?;
@@ -20,7 +20,7 @@ fn mute_notify(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
     Ok(())
 }
 
-fn toggle_mute(d: &mut ButtonDeck, arg: FnArg) -> Result<()> {
+fn toggle_mute<D>(d: &mut ButtonDeck<D>, arg: FnArg) -> Result<()> {
     info!("Mute Button {}", arg);
     match arg {
         FnArg::Button(rb) => {
@@ -59,7 +59,7 @@ fn main_with_result() -> Result<()> {
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(DeviceKind::StreamDeck)
+    let mut deck = ButtonDeckBuilder::<()>::new(DeviceKind::StreamDeck)
         .with_config("demo/panoo.json")
         .with_function("mute_notify", mute_notify )
         .with_function("toggle_mute", toggle_mute )
@@ -80,6 +80,7 @@ fn main_with_result() -> Result<()> {
 
     Ok(())
 }
+
 
 
 

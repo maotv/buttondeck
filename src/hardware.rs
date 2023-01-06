@@ -95,3 +95,8 @@ pub enum ButtonClass {
     MidiNote,
 
 }
+
+
+pub fn discover() {
+
+}

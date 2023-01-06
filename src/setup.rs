@@ -1,4 +1,4 @@
-use std::{fs::File, sync::Arc, collections::HashMap, rc::Rc, cell::RefCell, path::{PathBuf, Path}};
+use std::{fs::File, sync::Arc, collections::HashMap, rc::Rc, cell::RefCell, path::{PathBuf, Path}, thread::{self, JoinHandle}};
 
 use hidapi::HidApi;
 use indexmap::IndexMap;
@@ -14,19 +14,28 @@ type Result<T> = std::result::Result<T,DeckError>;
 
 #[derive(Default,Serialize,Deserialize)]
 struct DeckJson {
+
     home:     Option<String>,
+
     midi_in:  Option<String>,
     midi_out: Option<String>,
-    deck: Option<ButtonDeckTemplate>,
-}
 
+    devices:  Option<HashMap<String,ButtonDeckTemplate>>,
+
+    controls: Option<IndexMap<String,ButtonTemplate>>,
+    setups:   Option<IndexMap<String,SetupTemplate>>,
+
+
+    deck: Option<ButtonDeckTemplate>,
+
+}
 
 #[derive(Serialize,Deserialize)]
 struct ButtonDeckTemplate {
-    label:    String,
+    label:    Option<String>,
     wiring:   IndexMap<String,PhysicalKeyTemplate>,
-    controls: IndexMap<String,ButtonTemplate>,
-    setups:   IndexMap<String,SetupTemplate>
+    controls: Option<IndexMap<String,ButtonTemplate>>,
+    setups:   Option<IndexMap<String,SetupTemplate>>,
 }
 
 
@@ -89,10 +98,25 @@ struct ReferenceTemplate {
     state:   Option<String>
 }
 
-
-
 #[derive(Default)]
-pub struct ButtonDeckBuilder {
+struct XCell<T> 
+    where T: Default
+{
+    item: T
+}
+
+impl <T> XCell<T> 
+    where T: Default
+{
+    pub fn borrow_mut(&mut self) -> &mut T {
+        &mut self.item
+    }
+}
+
+// #[derive()]
+pub struct ButtonDeckBuilder<D> 
+    where D: 'static + Sync + Send 
+{
     kind: DeviceKind,
     pwd: PathBuf,
     hidapi: Option<HidApi>,
@@ -100,16 +124,26 @@ pub struct ButtonDeckBuilder {
     home: Option<PathBuf>,
     midi_in: Option<String>,
     midi_out: Option<String>,
-    functions: RefCell<Vec<(String,ButtonFn)>>,
+    data: Option<D>,
+    functions: Vec<(String,ButtonFn<D>)>,
 }
 
-impl ButtonDeckBuilder {
+impl <D> ButtonDeckBuilder<D> 
+    where D: Sync + Send + 'static
+{
 
     pub fn new(kind: DeviceKind) -> Self {
         ButtonDeckBuilder {
             kind,
-            ..Default::default()
-        }
+            data: None,
+            pwd: Default::default(),
+            hidapi: None,
+            config: None,
+            home: None,
+            midi_in: None,
+            midi_out: None,
+            functions: Vec::new(),
+                }
     }
 
     pub fn home_path<'a>(&'a self) -> &'a Path {
@@ -119,26 +153,31 @@ impl ButtonDeckBuilder {
         }
     }
 
-    pub fn with_config(&mut self, config: &str) -> &mut Self {
-        self.config  = Some(PathBuf::from(config));
-        let op = PathBuf::from(config).parent().map(|p| PathBuf::from(p));
+    pub fn with_config<P: AsRef<Path>>(&mut self, config: P) -> &mut Self {
+        self.config  = Some(PathBuf::from(config.as_ref()));
+        let op = PathBuf::from(config.as_ref()).parent().map(|p| PathBuf::from(p));
         self.pwd = op.unwrap_or_else(|| PathBuf::default());
         self
     }
 
-    pub fn with_functions(&mut self, mut functions: Vec<(String,ButtonFn)>) -> &mut Self {
+    pub fn with_data(&mut self, data: D) -> &mut Self {
+        self.data = Some(data);
+        self
+    }
 
-        self.functions.borrow_mut().append(&mut functions);
+    pub fn with_functions(&mut self, mut functions: Vec<(String,ButtonFn<D>)>) -> &mut Self {
+
+        self.functions.append(&mut functions);
         self
     }
 
     pub fn with_function<F>(&mut self, name: &str, function: F) -> &mut Self 
-        where F: FnMut(&mut ButtonDeck, FnArg) -> Result<()> + Send + 'static
+        where F: FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send + Sync + 'static
     {
         {
             let bf = ButtonFn { func: Box::new(function) };
-            let mut fa = self.functions.borrow_mut();
-            fa.push((String::from(name),bf));
+            // let mut fa = self.functions;
+            self.functions.push((String::from(name),bf));
         }
 
 
@@ -160,8 +199,26 @@ impl ButtonDeckBuilder {
     //     }
     // }
 
+    
 
-    pub fn build(&mut self) -> Result<ButtonDeck> {
+
+    pub fn spawn(mut self: ButtonDeckBuilder<D>) -> JoinHandle<()> {
+        thread::spawn(move || {
+            match self.build() {
+                Ok(mut buttondeck) => {
+                    buttondeck.run()
+                },
+                Err(e) => {
+                    error!("Build Error: {:?}", e)
+                }
+            }
+        })
+    }
+
+
+
+
+    pub fn build(&mut self) -> Result<ButtonDeck<D>> {
 
         trace!("Build from config: {:?}", &self.config);
 
@@ -172,17 +229,19 @@ impl ButtonDeckBuilder {
             None => DeckJson::default()
         };
 
-        if let Some(s) = deckjson.midi_in {
-            self.midi_in = Some(s)
+        if let Some(s) = &deckjson.midi_in {
+            self.midi_in = Some(s.clone())
         }
 
-        if let Some(s) = deckjson.midi_out {
-            self.midi_out = Some(s)
+        if let Some(s) = &deckjson.midi_out {
+            self.midi_out = Some(s.clone())
         }
 
 
         let specs = self.kind.get_specs();
 
+
+        let mut opt_hidapi = None; 
 
         trace!("family is {:?}",specs.family);
         let device = match specs.family {
@@ -192,7 +251,10 @@ impl ButtonDeckBuilder {
                     Some(api) => api,
                     None => HidApi::new()?
                 };
-                crate::device::open_streamdeck(&mut hidapi, self.kind)
+
+                let r = crate::device::open_streamdeck(&mut hidapi, self.kind);
+                opt_hidapi = Some(hidapi);
+                r
             }
 
             DeviceFamily::Midi => {
@@ -201,8 +263,11 @@ impl ButtonDeckBuilder {
 
         }?;
 
-        let mut deck = build_buttondeck(self, deckjson.deck, device)?;
+        let mut deck = build_buttondeck(self, deckjson, device)?;
+
+        deck.hidapi = opt_hidapi;
         deck.initialize()?;
+
         // deck.switch_to_name("default");
 
         Ok(deck)
@@ -216,14 +281,18 @@ impl ButtonDeckBuilder {
 
 
 
-struct BuilderData<'a> {
-    builder:     &'a ButtonDeckBuilder,
+struct BuilderData<'a,D> 
+    where D: Send + Sync + 'static
+{
+    builder:     &'a ButtonDeckBuilder<D>,
     setup_refs:  Vec<Prep<'a,SetupRef,SetupTemplate>>,
     button_refs: Vec<Prep<'a,ButtonId,ButtonTemplate>>,
     function_refs: Vec<FnRef>,
 }
 
-impl<'a> BuilderData<'a> {
+impl<'a,D> BuilderData<'a,D> 
+    where D: Send + Sync
+{
 
     fn setup_for_opt_name(&self, name: &Option<String>) -> Option<SetupRef> {
         match name {
@@ -254,9 +323,10 @@ struct Prep<'a,R,T> {
 
 
 
-fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeckTemplate>, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck> {
+fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut deckjson: DeckJson, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck<D>> {
 
     let deckid = 42;
+
 
     // debug!("setup::build_buttondeck {:?} with dir {:?}", &device.model(), home_folder);
     let device: &dyn ButtonDeviceTrait = match &any_device {
@@ -264,10 +334,21 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         ButtonDevice::Midi(md) => md,
     };
 
+    let model = device.model();
 
-    let template = match opt_template {
+    info!("build_buttondeck for device {}", model);
+
+    let opt_template = deckjson.devices
+        .and_then(|mut dv| dv.remove(&model))
+        .or_else(|| deckjson.deck);
+
+
+
+    let device_template = match opt_template {
+
         Some(t) => t,
         None => {
+
             let json_path = builder.home_path().join(format!("{}.json", device.model()));
             trace!("Reading config from {:?}", json_path);
         
@@ -275,17 +356,26 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
             let xt: ButtonDeckTemplate = serde_json::from_reader(f)?;
             trace!("Done reading config");
             xt
+
         }
+
     };
 
 
-    let maxid = template.wiring.iter().map(|(n,w)| w.id).max().unwrap_or(127);
+
+    // --------------------------------------------------------
+    // Wiring
+    // --------------------------------------------------------
+
+    let wiring = device_template.wiring;
+
+    let maxid = wiring.iter().map(|(n,w)| w.id).max().unwrap_or(127);
     trace!("Max button id is {}", maxid);
 
     let mut phys: Vec<Option<PhysicalKey>> = vec![None;maxid+1];
     let mut phymap: HashMap<String,PhysicalKey> = HashMap::new();
 
-    for (n,pt) in &template.wiring {
+    for (n,pt) in &wiring {
         let p: PhysicalKey = pt.into_key(n)?;
         if phys[p.id].is_some() { return  Err(DeckError::Message(format!("duplicate id: {}", p.id)));} 
         // if phymap.contains_key(&p.name) { return  Err(DeckError::Message(format!("duplicate name: {}", p.name))); }
@@ -295,7 +385,23 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         phymap.insert(n.clone(), p);
     }
 
-    let setup_refs: Vec<Prep<SetupRef,SetupTemplate>> = template.setups.iter().enumerate()
+
+
+
+    // --------------------------------------------------------
+    // Setups
+    // --------------------------------------------------------
+
+    let setups = device_template.setups
+        .or_else(|| deckjson.setups)
+        .unwrap_or_else(|| IndexMap::new());
+
+    let controls = device_template.controls
+        .or_else(|| deckjson.controls)
+        .unwrap_or_else(|| IndexMap::new());
+
+
+    let setup_refs: Vec<Prep<SetupRef,SetupTemplate>> = setups.iter().enumerate()
         .map(|(i,(n,t))| Prep {
             name: n,
             reference: SetupRef { id: i, name: n.clone() } ,
@@ -303,7 +409,7 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         })
         .collect();
 
-    let button_refs: Vec<Prep<ButtonId,ButtonTemplate>> = template.controls.iter().enumerate()
+    let button_refs: Vec<Prep<ButtonId,ButtonTemplate>> = controls.iter().enumerate()
         .map(|(i,(n,t))| {
             Prep {
                 name: n,
@@ -313,9 +419,18 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
         })
         .collect();
 
-    let functionvec: Vec<(String,Rc<RefCell<ButtonFn>>)> = builder.functions.take().into_iter()
-        .map(|(n,f)| (n, Rc::new(RefCell::new(f))))
-        .collect();
+
+
+    let mut functionvec: Vec<(String,Rc<RefCell<ButtonFn<D>>>)> = Vec::new();
+    for (n,f) in builder.functions.drain(..) {
+        functionvec.push((n, Rc::new(RefCell::new(f))))
+    }
+
+
+
+    // let functionvec: Vec<(String,Rc<RefCell<ButtonFn>>)> = builder.functions.into_iter()
+    //     .map(|(n,f)| (n, Rc::new(RefCell::new(f))))
+    //     .collect();
 
     let function_refs: Vec<FnRef> = functionvec.iter().enumerate()
         .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
@@ -325,7 +440,7 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
 
 
     let mut data = BuilderData {
-        builder,
+        builder: &builder,
         setup_refs,
         button_refs,
         function_refs
@@ -405,12 +520,14 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
     // };
 
     // dummy channels
-    let (tx,rx) = std::sync::mpsc::channel::<DeviceEvent>(); 
-    let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>(); 
+    let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
+    let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
+
 
     Ok(ButtonDeck {
 
         deckid: 42,
+        hidapi: None, // will be filled later
 
         device: Some(any_device),
         // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
@@ -422,9 +539,15 @@ fn build_buttondeck(builder: &ButtonDeckBuilder, opt_template: Option<ButtonDeck
 //         button_map,
         current_setup: 0,
         setup_arena,
-        self_sender: bdtx,
-        device_sender: tx,
-        device_receiver: Some(bdrx),
+        
+        // dummy!
+        device_event_sender: dvtx,
+        // dummy!
+        deck_event_sender: bdtx,
+        // dummy!
+        deck_event_receiver: Some(bdrx),
+
+        data: builder.data.take()
         // deckid: todo!(),
     })
 
@@ -442,7 +565,7 @@ fn state_for_opt_name(data: &Vec<Prep<StateRef,StateTemplate>>, name: &Option<St
 }   
 
 // fn build_button(data: &BuilderData, n: &str, bt: &ButtonTemplate) -> Button {
-fn build_button(data: &BuilderData, index: usize) -> Result<Button> {
+fn build_button<D: Send + Sync>(data: &BuilderData<D>, index: usize) -> Result<Button> {
 
     let prep = data.button_refs.get(index).ok_or_else(|| DeckError::Message(String::from("Internal Error(build_button#1)")))?;
 

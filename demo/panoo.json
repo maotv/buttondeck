@@ -4,78 +4,182 @@
 
     ],
 
+    "devices": {
 
-    "deck": {
+        "stream_deck": {
 
-        "label": "Stream Deck Mini",
+            "wiring": {
 
-        "wiring": {
-            "A1": { "id": 1 },
-            "B1": { "id": 2 },
-            "C1": { "id": 3 },
-            "A2": { "id": 4 },
-            "B2": { "id": 5 },
-            "C2": { "id": 6 }
-        },
+                "LEFT": { "id": 0 },
+                "RIGHT": { "id": 1 },
+                "P1": { "id": 2 },
+                "P2": { "id": 3 },
+                "P3": { "id": 4 },
 
+                "MUTE": { "id": 5 },
+                "VOLUME": { "id": 6 },
+                "P4": { "id": 7 },
+                "P5": { "id": 8 },
+                "P6": { "id": 9 },
 
+                "POWER": { "id": 10 },
+                "FULL": { "id": 11 },
+                "P7": { "id": 12 },
+                "P8": { "id": 13 },
+                "P9": { "id": 14 }
 
-        "setups": {
-            "default": {
-                "mapping": {
-                    "A1": { "control": "mute",  "state": "default" }, 
-                    "B1": { "control": "prev", "state": "default" }, 
-                    "C1": { "control": "next",  "state": "default" }, 
-                    "A2": { "control": "volume",  "state": "default" }, 
-                    "B2": { "control": "fullscreen",  "state": "default" }, 
-                    "C2": { "control": "standby",  "state": "default" }
-                }
             }
+
         },
+    
+        "stream_deck_xl": {
 
+            "wiring": {
 
+                "LEFT": { "id": 0 },
+                "RIGHT": { "id": 1 },
+                "P1": { "id": 2 },
+                "P2": { "id": 3 },
+                "P3": { "id": 4 },
+                "P4": { "id": 5 },
+                "P5": { "id": 6 },
+                "P6": { "id": 7 },
 
+                "MUTE": { "id": 8 },
+                "VOLUME": { "id": 9 },
+                "P7": { "id": 10 },
+                "P8": { "id": 11 },
+                "P9": { "id": 12 },
+                "P10": { "id": 13 },
+                "P11": { "id": 14 },
+                "P12": { "id": 15 },
 
+                "POWER": { "id": 16 },
+                "FULL": { "id": 17 },
+                "P13": { "id": 18 },
+                "P14": { "id": 19 },
+                "P15": { "id": 20 },
+                "P16": { "id": 21 },
+                "P17": { "id": 22 },
+                "P18": { "id": 23 }
 
+            }
 
-        "controls": {
-
-
-
-            "mute": {
-                "label": "Mute Button",
-                "on_down": "toggle_mute",
-                "states": {
-                    "off": {
-                        "image": "panoo.png"
-                    },
-                    "on": {
-                        "image": "panoox.png"
-                    }
-                }
-            },
-            "prev": {
-                "label": "Previous Frame",
-                "image": "panoo.png"
-            },
-            "next": {
-                "label": "Next Frame",
-                "image": "panoo.png"
-            },
-            "volume": {
-                "label": "Volume Controls",
-                "image": "panoo.png"
-            },
-            "fullscreen": {
-                "label": "Fulscreen Button",
-                "image": "panoo.png"
-            },
-            "standby": {
-                "label": "Standby Button",
-                "image": "panoo.png"
+        },
+    
+        "stream_deck_mini": {
+            "wiring": {
+                "A1": { "id": 1 },
+                "B1": { "id": 2 },
+                "C1": { "id": 3 },
+                "A2": { "id": 4 },
+                "B2": { "id": 5 },
+                "C2": { "id": 6 }
             }
 
         }
     
+    },
+
+
+
+
+
+
+
+    "setups": {
+        "default": {
+            "mapping": {
+                "LEFT": { "control": "prev",  "state": "default" }, 
+                "RIGHT": { "control": "next", "state": "default" }, 
+                "MUTE": { "control": "mute",  "state": "default" }, 
+                "VOLUME": { "control": "volume",  "state": "default" }, 
+                "FULL": { "control": "fullscreen",  "state": "default" }, 
+                "POWER": { "control": "standby",  "state": "default" },
+                "P0": { "control": "p0" },
+                "P1": { "control": "p1" },
+                "P2": { "control": "p2" },
+                "P3": { "control": "p3" },
+                "P4": { "control": "p4" },
+                "P5": { "control": "p5" },
+                "P6": { "control": "p6" },
+                "P7": { "control": "p7" },
+                "P8": { "control": "p8" },
+                "P9": { "control": "p9" }
+            }
+        }
+    },
+
+
+
+
+
+
+    "controls": {
+
+        "mute": {
+            "label": "Mute Button",
+            "on_down": "toggle_mute",
+            "states": {
+                "off": {
+                    "image": "mute.png"
+                },
+                "on": {
+                    "image": "panoox.png"
+                }
+            }
+        },
+        "prev": {
+            "label": "Previous Frame",
+            "image": "left.png"
+        },
+        "next": {
+            "label": "Next Frame",
+            "image": "right.png"
+        },
+        "volume": {
+            "label": "Volume Controls",
+            "image": "music.png"
+        },
+        "fullscreen": {
+            "label": "Fulscreen Button",
+            "image": "fullscreen.png"
+        },
+        "standby": {
+            "label": "Standby Button",
+            "image": "power.png"
+        },
+        "p0": {
+            "image": "panoo.png"
+        },
+        "p1": {
+            "image": "panoo.png"
+        },
+        "p2": {
+            "image": "panoo.png"
+        },
+        "p3": {
+            "image": "panoo.png"
+        },
+        "p4": {
+            "image": "panoo.png"
+        },
+        "p5": {
+            "image": "panoo.png"
+        },
+        "p6": {
+            "image": "panoo.png"
+        },
+        "p7": {
+            "image": "panoo.png"
+        },
+        "p8": {
+            "image": "panoo.png"
+        },
+        "p9": {
+            "image": "panoo.png"
+        }
+
     }
+
 }

@@ -1,4 +1,5 @@
 
+use hidapi::HidApi;
 use log::error;
 use log::{debug, warn};
 
@@ -11,12 +12,14 @@ use std::path::PathBuf;
 
 use std::rc::Rc;
 use std::str::FromStr;
+use std::thread;
+use std::time::Duration;
 
 
 use crate::{ButtonId, ButtonColor, StateRef2};
 use crate::Button;
 use crate::DeckError;
-use crate::device::ButtonDevice;
+use crate::device::{ButtonDevice, discover_streamdeck};
 use crate::device::PhysicalKey;
 use crate::device::DeviceEvent;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -27,8 +30,10 @@ type Result<T> = std::result::Result<T,DeckError>;
 
 pub enum DeckEvent {
     Void,
+    Disconnected,
     Device(DeviceEvent),
-    FnCall(String, FnArg)
+    FnCall(String, FnArg),
+    SetState(String,String)
 }
 
 
@@ -81,11 +86,11 @@ impl Default for SetupRef {
 
 
 type NoArgFunc = dyn Fn() -> () + 'static;
-type DeckArgsFunc = dyn FnMut(&mut ButtonDeck, FnArg) -> Result<()> + 'static;
+type DeckArgsFunc<D> = dyn FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send + Sync;
 
 // #[derive(Clone)]
-pub struct ButtonFn {
-    pub func: Box<DeckArgsFunc>
+pub struct ButtonFn<D> {
+    pub func: Box<DeckArgsFunc<D>>
 }
 // impl From<NoArgFunc> for ButtonFn {
 //     fn from(x: NoArgFunc) -> Self {
@@ -93,8 +98,8 @@ pub struct ButtonFn {
 //     }
 // }
 
-impl ButtonFn {
-    fn call_fn(&mut self, deck: &mut ButtonDeck, arg: FnArg) {
+impl <D> ButtonFn<D> {
+    fn call_fn(&mut self, deck: &mut ButtonDeck<D>, arg: FnArg) {
         if let Err(e) = (self.func)(deck,arg) {
             error!("ButtonFn returned error: {:?}", e);
         }
@@ -173,26 +178,27 @@ impl Display for FnArg {
 }
 
 
-pub struct ButtonDeck
+pub struct ButtonDeck<D>
 {
 
     pub (crate) deckid: usize,
 
+    pub (crate) hidapi: Option<HidApi>,
+
     // pub (crate) device: Rc<RefCell<Box<dyn ButtonDevice>>>,
     pub (crate) device: Option<ButtonDevice>,
 
-    pub (crate) device_sender:   Sender<DeviceEvent>,
-
-    pub (crate) device_receiver: Option<Receiver<DeckEvent>>,
-
-    pub (crate) self_sender:     Sender<DeckEvent>,
-
-
-    pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn>>)>,
-
-
     // folder with config & icons
     pub (crate) folder: PathBuf,
+
+    pub (crate) device_event_sender:   Sender<DeviceEvent>,
+
+    pub (crate) deck_event_receiver: Option<Receiver<DeckEvent>>,
+    pub (crate) deck_event_sender:     Sender<DeckEvent>,
+
+
+    pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn<D>>>)>,
+
 
     // The memory arena where all defined buttons live
     pub (crate) button_arena: Vec<Button>,
@@ -213,18 +219,50 @@ pub struct ButtonDeck
     // all setups by name
     pub (crate) setup_arena: Vec<ButtonSetup>,
 
+    pub data: Option<D>
+
     // receiver: mpsc::Receiver<DeviceEvent>
 
 }
 
 
-impl ButtonDeck
+impl <D> ButtonDeck<D>
 {
+
+    // pub fn new() -> Self {
+    //     ButtonDeck {
+
+    //         deckid: 42,
+    //         hidapi: None, // will be filled later
+
+    //         device: Some(any_device),
+    //         // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
+    //         folder: PathBuf::from(builder.home_path()),
+    //         wiring: phys,
+    //         functions: functionvec,
+    //         current_key_map: ccm,
+    //         button_arena,
+    // //         button_map,
+    //         current_setup: 0,
+    //         setup_arena,
+            
+    //         // dummy!
+    //         device_event_sender: dvtx,
+    //         // dummy!
+    //         deck_event_sender: bdtx,
+    //         // dummy!
+    //         deck_event_receiver: Some(bdrx),
+
+    //         data: builder.data.take()
+
+    //     }
+    // }
+
 
     pub fn initialize(&mut self) -> Result<()> {
 
 
-        let (tx_to_buttondeck,rx_from_devices) = mpsc::channel();
+        let (tx_deck_events,rx_deck_events) = mpsc::channel();
 
         let optdev = self.device.take();
         debug!("Device is: {:?}", optdev.is_some());
@@ -234,16 +272,17 @@ impl ButtonDeck
 
             let tx_to_device = match device {
                 ButtonDevice::Streamdeck(mut sd) => {
-                    sd.start(tx_to_buttondeck.clone())
+                    sd.start(tx_deck_events.clone())
                 },
                 ButtonDevice::Midi(mut md) => {
-                    md.start(tx_to_buttondeck.clone())
+                    md.start(tx_deck_events.clone())
                 },
             }?;
 
-            self.device_receiver = Some(rx_from_devices);
-            self.device_sender   = tx_to_device.clone();
-            self.self_sender = tx_to_buttondeck.clone();
+            self.device_event_sender   = tx_to_device.clone();
+
+            self.deck_event_receiver = Some(rx_deck_events);
+            self.deck_event_sender = tx_deck_events;
 
 
 
@@ -260,26 +299,28 @@ impl ButtonDeck
 
     pub fn get_sender(&self) -> ButtonDeckSender {
         ButtonDeckSender {
-            sender: self.self_sender.clone()
+            sender: self.deck_event_sender.clone()
         }
     }
 
 
-    pub fn spawn(&mut self) {
-
-    }
-
 
     pub fn run(&mut self) {
 
-        let optrx = self.device_receiver.take();
+        let optrx = self.deck_event_receiver.take();
         if optrx.is_none() { return; }
 
         let rx = optrx.expect("checked above");
 
 
+        warn!("##### looooppp");
+
+
         loop {
             if let Ok(event) = rx.recv() {
+
+                warn!("DeckEvent ...");
+
                 match event {
                     DeckEvent::Void => {
                         warn!("Got void event");
@@ -287,15 +328,45 @@ impl ButtonDeck
                     DeckEvent::FnCall(name, arg) => {
                         self.call_fn_by_name(&name, arg)
                     },
+                    DeckEvent::SetState(name, state) => {
+                        warn!("Got set_button_state event {} {}", name, state);
+                        self.set_button_state(&name, &state);
+                    },
                     DeckEvent::Device(e) => {
                         self.handle_device_event(e)
                     },
+                    DeckEvent::Disconnected => {
+                        debug!("Disconnected...");
+                        self.run_reconnect();
+                    }
+                    
                 }
             }
         }
 
 
     }
+
+    pub fn run_reconnect(&mut self) {
+
+        let hidapi = HidApi::new();
+
+        loop {
+            debug!("Reconnect...");
+           
+            match discover_streamdeck(&mut self.hidapi) {
+                Ok(_) => {
+
+                },
+                Err(_) => {
+
+                },
+            }
+            thread::sleep(Duration::from_millis(3000));
+        }
+
+    }
+
 
     fn handle_device_event(&mut self, event: DeviceEvent) {
         match event {
@@ -388,10 +459,6 @@ impl ButtonDeck
     }
 
 
-    fn decorate_buttonx(&self, btn: ButtonId) -> Result<()> {
-
-        Ok(())
-    }
 
     fn decorate_button(&self, btn: ButtonId) -> Result<()> {
 
@@ -405,11 +472,11 @@ impl ButtonDeck
         if let Some(pk) = key {
             debug!("key is {:?}", &pk);
             if let Some(c) = color {
-                self.device_sender.send(DeviceEvent::SetColor(pk.id, c.clone()));
+                self.device_event_sender.send(DeviceEvent::SetColor(pk.id, c.clone()));
             }
             if let Some(c) = image {
                 debug!("image is {:?}", &c);
-                self.device_sender.send(DeviceEvent::SetImage(pk.id, c.clone()));
+                self.device_event_sender.send(DeviceEvent::SetImage(pk.id, c.clone()));
             }
         }
 
@@ -424,8 +491,25 @@ impl ButtonDeck
         Ok(())
     }
 
-    pub fn set_button_state(&self, name: &str, state: &str) -> Result<()> {
+    pub fn set_button_state(&mut self, name: &str, state: &str) -> Result<()> {
+
         let bid = self.button_id_from_name(name)?;
+        // let sr = match self.button(bid) {
+        //     Ok(b) => {
+        //         b.get_state_ref2(state)
+        //     }
+        //     Err(_) => {
+        //         None
+        //     }
+        // };
+
+        if let Ok(b) = self.button_mut(bid) {
+            if b.switch_state(state) {
+                self.decorate_button(bid);
+            }
+        }
+
+
         Ok(())
     }
 

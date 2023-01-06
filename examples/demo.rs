@@ -8,7 +8,7 @@ fn simplefunc() -> Result<()>  {
     Ok(())
 }
 
-fn customfunc(d: &mut ButtonDeck, e: FnArg) -> Result<()> {
+fn customfunc<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
     warn!("Customfunc!");
     d.switch_to("volume");
     Ok(())
@@ -42,7 +42,7 @@ fn main_with_result() -> Result<()> {
     // let mut api = ButtonApi { hidapi: HidApi::new()? };
     // let mut deck = ButtonDeck::open_deck(&mut api, "demo")?;
 
-    let mut deck = ButtonDeckBuilder::new(DeviceKind::StreamDeck)
+    let mut deck = ButtonDeckBuilder::<()>::new(DeviceKind::StreamDeck)
         .with_config("demo/deck.json")
         .with_functions(functions)
         .build()?;
