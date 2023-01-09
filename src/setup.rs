@@ -3,6 +3,7 @@ use std::{fs::File, sync::Arc, collections::HashMap, rc::Rc, cell::RefCell, path
 use hidapi::HidApi;
 use indexmap::IndexMap;
 use serde_derive::{Serialize,Deserialize};
+use serde_json::Value;
 
 use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}, StateRef2, ButtonId};
 
@@ -320,6 +321,50 @@ struct Prep<'a,R,T> {
     reference: R,
     template: &'a T
 }
+
+
+
+
+fn  build_buttondeck_neu<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, djraw: Value, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck<D>> {
+
+    let deckjson = serde_json::from_value::<DeckJson>(djraw)?;
+
+    let device: &dyn ButtonDeviceTrait = match &any_device {
+        ButtonDevice::Streamdeck(sd) => sd as &dyn ButtonDeviceTrait,
+        ButtonDevice::Midi(md) => md,
+    };
+
+
+    let model = device.model();
+
+    info!("build_buttondeck for device {}", model);
+
+    let opt_template = deckjson.devices
+        .and_then(|mut dv| dv.remove(&model))
+        .or_else(|| deckjson.deck);
+
+
+
+    let device_template = match opt_template {
+
+        Some(t) => t,
+        None => {
+
+            let json_path = builder.home_path().join(format!("{}.json", device.model()));
+            trace!("Reading config from {:?}", json_path);
+        
+            let f = File::open(json_path)?;
+            serde_json::from_reader(f)?
+        }
+
+    };
+
+
+
+    Err(DeckError::NoDevice)
+    
+}
+
 
 
 
