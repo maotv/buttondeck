@@ -17,6 +17,7 @@ use std::thread;
 use std::time::Duration;
 
 
+use crate::button::ButtonValue;
 use crate::{ButtonId, ButtonColor, StateRef2};
 use crate::Button;
 use crate::DeckError;
@@ -146,12 +147,13 @@ impl ButtonDeckSender {
 }
 
 
+#[derive(Debug)]
 pub enum FnArg {
     None,
     Bool(bool),
     Int(isize),
     Float(f32),
-    Button(ButtonId),
+    Button(ButtonId, ButtonValue),
 }
 
 
@@ -160,6 +162,12 @@ impl FnArg {
         match self {
             FnArg::Bool(b) => *b,
             _ => false 
+        }
+    }
+    pub fn value_to_string(&self) -> String {
+        match self {
+            FnArg::Button(b, v) => v.to_string(),
+            _ => String::new() 
         }
     }
 }
@@ -172,7 +180,7 @@ impl Display for FnArg {
             FnArg::Bool(b) => write!(fm, "FnArg::Bool({})", b),
             FnArg::Int(i) => write!(fm, "FnArg::Int({})", i),
             FnArg::Float(f) => write!(fm, "FnArg::Float({})", f),
-            FnArg::Button(b) => write!(fm, "FnArg::Button({:?})", b),
+            FnArg::Button(b, v) => write!(fm, "FnArg::Button({:?}, {:?})", b, v),
             FnArg::None => write!(fm, "FnArg::None")
         }
     }
@@ -587,8 +595,11 @@ impl <D> ButtonDeck<D>
 
     fn call_fn(&mut self, fr: &FnRef, br: ButtonId) {
 
+        let val = self.button(br).and_then(|b| Ok(b.effective_value())).unwrap_or(&ButtonValue::None);
+
+
         let opt_func = self.functions.get(fr.id).cloned(); // .unwrap().clone();
-        let arg = FnArg::Button(br.clone());
+        let arg = FnArg::Button(br.clone(), val.clone());
 
         if let Some(f) = opt_func {
             f.1.borrow_mut().call_fn(self,arg);

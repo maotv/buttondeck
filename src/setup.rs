@@ -5,7 +5,7 @@ use indexmap::IndexMap;
 use serde_derive::{Serialize,Deserialize};
 use serde_json::Value;
 
-use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage}, StateRef2, ButtonId};
+use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage, ButtonValue}, StateRef2, ButtonId};
 
 use super::{DeckError, ButtonDeck, device::StreamDeckDevice, ButtonFn};
 
@@ -62,6 +62,10 @@ struct ButtonTemplate {
     label: Option<String>,
     color: Option<String>,
     image: Option<String>,
+
+    #[serde(default)]
+    value: Value,
+
     on_up: Option<String>,
     on_down:  Option<String>,
     on_value: Option<String>,
@@ -72,12 +76,15 @@ struct ButtonTemplate {
     states: Option<IndexMap<String,StateTemplate>>
 }
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct StateTemplate {
 
     color: Option<String>,
     image: Option<String>,
     effect: Option<String>,
+
+    #[serde(default)]
+    value: Value,
 
     on_up: Option<String>,
     on_down: Option<String>,
@@ -633,16 +640,20 @@ fn build_button<D: Send + Sync>(data: &BuilderData<D>, index: usize) -> Result<B
 
 
     let defaults = ButtonState {
+        
         // name: String::from(""),
         reference: StateRef { name: String::from("default"), id: 0 }, 
         color: ButtonColor::from_option_string(&bt.color), 
         image: ButtonImage::from_option_string(&data.builder.home_path(), &bt.image),
+
+        value: ButtonValue::from(bt.value.clone()),
 
         on_button_down: data.get_button_fn_ref(&bt.on_down).cloned(), 
         on_button_up: data.get_button_fn_ref(&bt.on_up).cloned(), 
         
         switch_button_state: state_for_opt_name(&state_prep, &bt.switch_button_state),
         switch_deck_setup: data.setup_for_opt_name(&bt.switch_deck_setup),
+
     };
     
 
@@ -661,6 +672,7 @@ fn build_button<D: Send + Sync>(data: &BuilderData<D>, index: usize) -> Result<B
                     // name: String::from(n),
                     color: ButtonColor::from_option_string(&p.template.color), 
                     image: ButtonImage::from_option_string(data.builder.home_path(), &p.template.image), 
+                    value: ButtonValue::from(p.template.value.clone()),
                     on_button_down: data.get_button_fn_ref(&p.template.on_down).cloned(), 
                     on_button_up: data.get_button_fn_ref(&p.template.on_up).cloned(),
                     switch_button_state: state_for_opt_name(&state_prep, &p.template.switch_button_state), //  s.switch_button_state.clone(),

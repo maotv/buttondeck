@@ -1,8 +1,13 @@
 use std::{path::{PathBuf, Path}, str::FromStr};
 
+use log::warn;
+use serde_json::Value;
+
 use crate::{device::PhysicalKey, deck::{FnRef, SetupRef}, DeckError};
 
 type Result<T> = std::result::Result<T,DeckError>;
+
+const VALUE_NONE: ButtonValue = ButtonValue::None;
 
 #[derive(Clone,Debug)]
 pub enum StateRef2 {
@@ -249,6 +254,47 @@ impl Button {
         }
     }
 
+    pub fn effective_value<'a>(&'a self) -> &'a ButtonValue {
+
+        warn!("Button Value is {:?} {:?}", &self.current_state().value, &self.defaults.value);
+        
+        match &self.current_state().value {
+            ButtonValue::None => {
+                let dv = &self.defaults.value;
+                match dv {
+                    ButtonValue::None => &VALUE_NONE,
+                    _ => self.get_true_button_value(dv)
+                }
+            }
+            V => {
+                self.get_true_button_value(V)
+            }
+        }
+
+        // match cv {
+        //     ButtonValue::None => {
+        //         let dv = &self.defaults.value;
+        //         match dv {
+        //             ButtonValue::None => dv,
+                    
+        //         }
+
+        //     }
+            
+            
+            
+        //     match &self.defaults.value {
+        //         ButtonValue::None => ButtonValue::None
+        //         Some(c) => Some(c),
+        //     },
+        //     x => x 
+        // }
+    }
+
+    fn get_true_button_value<'a>(&'a self, bv: &'a ButtonValue) -> &'a ButtonValue {
+        // TODO handle Rotary value, other values here
+        bv
+    }
 
 
     pub fn effective_image<'a>(&'a self) -> Option<&'a ButtonImage> {
@@ -363,6 +409,56 @@ impl FromStr for ButtonColor {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum ButtonValue {
+
+    None,
+    Bool(bool),
+    OnOff,
+    String(String),
+    Number,
+
+    Error(String)
+}
+
+impl From<Value> for ButtonValue {
+    fn from(v: Value) -> Self {
+        match v {
+            Value::Null => ButtonValue::None,
+            Value::Bool(b) => ButtonValue::Bool(b),
+            Value::Number(n) => {
+                ButtonValue::None
+            },
+            Value::String(s) => ButtonValue::String(s),
+            Value::Array(_) => ButtonValue::Error(String::from("Arrays are not supported in ButtonValue")),
+            Value::Object(_) => ButtonValue::Error(String::from("Objects are not supported in ButtonValue")),
+        }
+    }
+}
+
+impl ToString for ButtonValue {
+    fn to_string(&self) -> String {
+        match self {
+            ButtonValue::None => String::new(),
+            ButtonValue::Bool(b) => b.to_string(),
+            ButtonValue::OnOff => String::from("on/off"),
+            ButtonValue::String(s) => s.clone(),
+            ButtonValue::Number => String::from("TODO"),
+            ButtonValue::Error(e) => format!("Error: {:?}", e),
+        }
+    }
+}
+
+
+impl Default for ButtonValue {
+    fn default() -> Self {
+        ButtonValue::None
+    }
+}
+
+
+
+
 #[derive(Default)]
 pub struct ButtonState
 {
@@ -371,6 +467,9 @@ pub struct ButtonState
 
     pub (crate) color: Option<ButtonColor>,
     pub (crate) image: Option<ButtonImage>,
+
+    pub (crate) value: ButtonValue,
+
 
     pub (crate) on_button_down: Option<FnRef>,
     pub (crate) on_button_up:   Option<FnRef>,

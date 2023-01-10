@@ -23,7 +23,7 @@ fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
 fn toggle_mute<D>(d: &mut ButtonDeck<D>, arg: FnArg) -> Result<()> {
     info!("Mute Button {}", arg);
     match arg {
-        FnArg::Button(rb) => {
+        FnArg::Button(rb, v) => {
             d.toggle_button_state(rb)?
         }
         FnArg::Bool(b) => {
