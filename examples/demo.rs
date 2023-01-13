@@ -1,4 +1,5 @@
 use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, FnArg};
+use hidapi::HidApi;
 use log::{error, warn, info};
 
 type Result<T> = std::result::Result<T,DeckError>;
@@ -8,7 +9,9 @@ fn simplefunc() -> Result<()>  {
     Ok(())
 }
 
-fn customfunc<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
+fn customfunc<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> 
+    where D: Send + Sync + 'static
+{
     warn!("Customfunc!");
     d.switch_to("volume");
     Ok(())
@@ -45,6 +48,7 @@ fn main_with_result() -> Result<()> {
     let mut deck = ButtonDeckBuilder::<()>::new(DeviceKind::StreamDeck)
         .with_config("demo/deck.json")
         .with_functions(functions)
+        .with_hidapi(HidApi::new()?)
         .build()?;
 
 

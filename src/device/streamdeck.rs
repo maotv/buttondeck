@@ -53,10 +53,18 @@ impl StreamDeckDevice {
 
     fn new(mut sd: StreamDeck) -> Self {
 
-        let model = sd.product().unwrap_or_else(|e| String::from("unknown")).replace(" ","_").to_lowercase();
+        // let model = sd.product().unwrap_or_else(|e| String::from("unknown")).replace(" ","_").to_lowercase();
 
         let kind = sd.kind();
         let offs = BUTTON_OFFSETS.iter().find(|(k,o)| k == &kind).map(|o| o.1).unwrap_or(0);
+
+        let model = String::from(match &kind {
+            Kind::Original => "stream_deck",
+            Kind::OriginalV2 => "stream_deck",
+            Kind::Mini => "stream_deck_mini",
+            Kind::Xl => "stream_deck_xl",
+            Kind::Mk2 => "stream_deck",
+        });
 
         StreamDeckDevice {  
             deck: sd,
@@ -66,20 +74,6 @@ impl StreamDeckDevice {
         }
     }
 
-    pub fn start(self, send_to_buttondeck: Sender<DeckEvent>) -> Result<Sender<DeviceEvent>> {
-
-        let (tx_to_device,rx_from_deck) = mpsc::channel();
-        // let txclone = tx_to_device.clone();
-
-        debug!("StreamDeckDevice start");
-
-        thread::spawn(move || {
-            readwrite_thread(self, rx_from_deck, send_to_buttondeck);
-            error!("readwrite_thread returns");
-        });
-
-        Ok(tx_to_device)
-    }
 
 }
 
@@ -98,6 +92,20 @@ impl ButtonDeviceTrait for StreamDeckDevice {
     }
 
 
+    fn start(self, send_to_buttondeck: Sender<DeckEvent>) -> Result<Sender<DeviceEvent>> {
+
+        let (tx_to_device,rx_from_deck) = mpsc::channel();
+        // let txclone = tx_to_device.clone();
+
+        debug!("StreamDeckDevice start");
+
+        thread::spawn(move || {
+            readwrite_thread(self, rx_from_deck, send_to_buttondeck);
+            error!("readwrite_thread returns");
+        });
+
+        Ok(tx_to_device)
+    }
 
 }
 
@@ -261,7 +269,7 @@ pub fn discover_streamdeck(maybe_hidapi: &mut Option<HidApi>) -> Result<ButtonDe
         .collect(); 
 
     for i in &devinfo {
-        println!("Info: {:?} {:?}", i, i.serial_number())
+        debug!("Info: {:?} {:?}", i, i.serial_number())
     }
 
 

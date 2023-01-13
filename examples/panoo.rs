@@ -6,7 +6,9 @@ type Result<T> = std::result::Result<T,DeckError>;
 
 
 
-fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
+fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> 
+    where D: Send + Sync + 'static
+{
     
     warn!("Customfunc! {}", e);
     let bid = d.button_id_from_name("mute")?;
@@ -20,7 +22,9 @@ fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()> {
     Ok(())
 }
 
-fn toggle_mute<D>(d: &mut ButtonDeck<D>, arg: FnArg) -> Result<()> {
+fn toggle_mute<D>(d: &mut ButtonDeck<D>, arg: FnArg) -> Result<()> 
+    where D: Send + Sync + 'static
+{
     info!("Mute Button {}", arg);
     match arg {
         FnArg::Button(rb, v) => {

@@ -1,17 +1,20 @@
-use std::{fs::File, sync::Arc, collections::HashMap, rc::Rc, cell::RefCell, path::{PathBuf, Path}, thread::{self, JoinHandle}};
+use std::{fs::File, sync::{Arc, atomic::{AtomicUsize, Ordering}}, collections::HashMap, rc::Rc, cell::RefCell, path::{PathBuf, Path}, thread::{self, JoinHandle}, time::Instant};
 
 use hidapi::HidApi;
 use indexmap::IndexMap;
 use serde_derive::{Serialize,Deserialize};
 use serde_json::Value;
 
-use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage, ButtonValue}, StateRef2, ButtonId};
+use crate::{Button, ButtonSetup, ButtonState, ButtonColor, deck::{ButtonMapping, FnRef, SetupRef, FnArg, DeckDeviceSetup}, device::{PhysicalKey, ButtonDevice, DeviceEvent}, DeviceFamily, DeviceKind, ButtonDeviceTrait, DeckEvent, button::{StateRef, ButtonImage, ButtonValue}, StateRef2, ButtonId};
 
 use super::{DeckError, ButtonDeck, device::StreamDeckDevice, ButtonFn};
 
 use log::{error, debug, warn, info, trace};
 
 type Result<T> = std::result::Result<T,DeckError>;
+
+
+static idgen: AtomicUsize = AtomicUsize::new(1);
 
 #[derive(Default,Serialize,Deserialize)]
 struct DeckJson {
@@ -161,25 +164,25 @@ impl <D> ButtonDeckBuilder<D>
         }
     }
 
-    pub fn with_config<P: AsRef<Path>>(&mut self, config: P) -> &mut Self {
+    pub fn with_config<P: AsRef<Path>>(mut self, config: P) -> Self {
         self.config  = Some(PathBuf::from(config.as_ref()));
         let op = PathBuf::from(config.as_ref()).parent().map(|p| PathBuf::from(p));
         self.pwd = op.unwrap_or_else(|| PathBuf::default());
         self
     }
 
-    pub fn with_data(&mut self, data: D) -> &mut Self {
+    pub fn with_data(mut self, data: D) -> Self {
         self.data = Some(data);
         self
     }
 
-    pub fn with_functions(&mut self, mut functions: Vec<(String,ButtonFn<D>)>) -> &mut Self {
+    pub fn with_functions(mut self, mut functions: Vec<(String,ButtonFn<D>)>) -> Self {
 
         self.functions.append(&mut functions);
         self
     }
 
-    pub fn with_function<F>(&mut self, name: &str, function: F) -> &mut Self 
+    pub fn with_function<F>(mut self, name: &str, function: F) -> Self 
         where F: FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send + Sync + 'static
     {
         {
@@ -195,7 +198,8 @@ impl <D> ButtonDeckBuilder<D>
     
 
 
-    pub fn with_hidapi(&mut self, hidapi: HidApi) -> &mut Self {
+    pub fn with_hidapi(mut self, hidapi: HidApi) -> Self {
+        self.hidapi = Some(hidapi);
         self
     }
 
@@ -224,69 +228,149 @@ impl <D> ButtonDeckBuilder<D>
     }
 
 
+    pub fn build(mut self) -> Result<ButtonDeck<D>> {
 
+            // collect all functions (rc<refcell<>>) as name,rc tuples in a vec
+        let mut functionvec: Vec<(String,Rc<RefCell<ButtonFn<D>>>)> = Vec::new();
+        for (n,f) in self.functions.drain(..) {
+            functionvec.push((n, Rc::new(RefCell::new(f))))
+        }
 
-    pub fn build(&mut self) -> Result<ButtonDeck<D>> {
+        // create references for the functions
+        let function_refs: Vec<FnRef> = functionvec.iter().enumerate()
+            .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
+            .collect();
 
-        trace!("Build from config: {:?}", &self.config);
+        // dummy channels
+        let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
+        let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
 
+        Ok(ButtonDeck {
 
+            deckid: idgen.fetch_add(1, Ordering::SeqCst),
+
+            hidapi: self.hidapi.take(),
+
+            // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
+            folder: PathBuf::from(self.home_path()),
+            ddsetup: Default::default(),
+            functions: functionvec,
+            
+            // dummy!
+            device_event_sender: dvtx,
+            // dummy!
+            deck_event_sender: bdtx,
+            // dummy!
+            deck_event_receiver: Some(bdrx), // TODO FIXME no option needed
+
+            data: self.data.take(),
+
+            other: None,
+            builder: self,
+        })
+
+    }
+
+    pub fn build_for_device(&mut self, device: ButtonDevice) -> Result<DeckDeviceSetup> {
 
         let deckjson: DeckJson = match &self.config {
             Some(c) => serde_json::from_reader(File::open(c)?)?,
             None => DeckJson::default()
         };
 
-        if let Some(s) = &deckjson.midi_in {
-            self.midi_in = Some(s.clone())
-        }
 
-        if let Some(s) = &deckjson.midi_out {
-            self.midi_out = Some(s.clone())
-        }
-
-
-        let specs = self.kind.get_specs();
-
-
-        let mut opt_hidapi = None; 
-
-        trace!("family is {:?}",specs.family);
-        let device = match specs.family {
-
-            DeviceFamily::Streamdeck => {
-                let mut hidapi = match self.hidapi.take() {
-                    Some(api) => api,
-                    None => HidApi::new()?
-                };
-
-                let r = crate::device::open_streamdeck(&mut hidapi, self.kind);
-                opt_hidapi = Some(hidapi);
-                r
-            }
-
-            DeviceFamily::Midi => {
-                crate::device::open_midi(self.kind, self.midi_in.clone(), self.midi_out.clone())
-            }
-
-        }?;
-
-        let mut deck = build_buttondeck(self, deckjson, device)?;
-
-        deck.hidapi = opt_hidapi;
-        deck.initialize()?;
-
-        // deck.switch_to_name("default");
-
-        Ok(deck)
-//        Err(DeckError::Message(String::from("NYI")))
+        build_buttondeck(self, deckjson, device)
 
     }
 
 
+//     pub fn build_old(&mut self) -> Result<ButtonDeck<D>> {
+
+//         trace!("Build from config: {:?}", &self.config);
+
+//         let deckjson: DeckJson = match &self.config {
+//             Some(c) => serde_json::from_reader(File::open(c)?)?,
+//             None => DeckJson::default()
+//         };
+
+//         if let Some(s) = &deckjson.midi_in {
+//             self.midi_in = Some(s.clone())
+//         }
+
+//         if let Some(s) = &deckjson.midi_out {
+//             self.midi_out = Some(s.clone())
+//         }
+
+
+//         let specs = self.kind.get_specs();
+
+
+//         let mut opt_hidapi = None; 
+
+//         trace!("family is {:?}",specs.family);
+//         let device = match specs.family {
+
+//             DeviceFamily::Streamdeck => {
+//                 let mut hidapi = match self.hidapi.take() {
+//                     Some(api) => api,
+//                     None => HidApi::new()?
+//                 };
+
+//                 let r = crate::device::open_streamdeck(&mut hidapi, self.kind);
+//                 opt_hidapi = Some(hidapi);
+//                 r
+//             }
+
+//             DeviceFamily::Midi => {
+//                 crate::device::open_midi(self.kind, self.midi_in.clone(), self.midi_out.clone())
+//             }
+
+//         }?;
+
+//         let mut deck = build_buttondeck(self, deckjson, device)?;
+
+//         deck.hidapi = opt_hidapi;
+//         deck.initialize()?;
+
+//         // deck.switch_to_name("default");
+
+//         Ok(deck)
+// //        Err(DeckError::Message(String::from("NYI")))
+
+//     }
+
+
 }
 
+// pub fn rebuild<D>(djraw: Value) -> Result<ButtonDeck<D>> {
 
+//     let deckjson = serde_json::from_value::<DeckJson>(djraw)?;
+
+//     let device: &dyn ButtonDeviceTrait = match &any_device {
+//         ButtonDevice::Streamdeck(sd) => sd as &dyn ButtonDeviceTrait,
+//         ButtonDevice::Midi(md) => md,
+//     };
+
+
+//     let model = device.model();
+
+//     info!("build_buttondeck for device {}", model);
+
+
+
+//     let mut deck = build_buttondeck(self, deckjson, device)?;
+
+
+
+
+//     deck.hidapi = opt_hidapi;
+//     deck.initialize()?;
+
+//     // deck.switch_to_name("default");
+
+//     Ok(deck)
+
+// }
 
 
 struct BuilderData<'a,D> 
@@ -332,50 +416,50 @@ struct Prep<'a,R,T> {
 
 
 
-fn  build_buttondeck_neu<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, djraw: Value, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck<D>> {
+// fn  build_buttondeck_neu<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, djraw: Value, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck<D>> {
 
-    let deckjson = serde_json::from_value::<DeckJson>(djraw)?;
+//     let deckjson = serde_json::from_value::<DeckJson>(djraw)?;
 
-    let device: &dyn ButtonDeviceTrait = match &any_device {
-        ButtonDevice::Streamdeck(sd) => sd as &dyn ButtonDeviceTrait,
-        ButtonDevice::Midi(md) => md,
-    };
-
-
-    let model = device.model();
-
-    info!("build_buttondeck for device {}", model);
-
-    let opt_template = deckjson.devices
-        .and_then(|mut dv| dv.remove(&model))
-        .or_else(|| deckjson.deck);
+//     let device: &dyn ButtonDeviceTrait = match &any_device {
+//         ButtonDevice::Streamdeck(sd) => sd as &dyn ButtonDeviceTrait,
+//         ButtonDevice::Midi(md) => md,
+//     };
 
 
+//     let model = device.model();
 
-    let device_template = match opt_template {
+//     info!("build_buttondeck for device {}", model);
 
-        Some(t) => t,
-        None => {
+//     let opt_template = deckjson.devices
+//         .and_then(|mut dv| dv.remove(&model))
+//         .or_else(|| deckjson.deck);
 
-            let json_path = builder.home_path().join(format!("{}.json", device.model()));
-            trace!("Reading config from {:?}", json_path);
+
+
+//     let device_template = match opt_template {
+
+//         Some(t) => t,
+//         None => {
+
+//             let json_path = builder.home_path().join(format!("{}.json", device.model()));
+//             trace!("Reading config from {:?}", json_path);
         
-            let f = File::open(json_path)?;
-            serde_json::from_reader(f)?
-        }
+//             let f = File::open(json_path)?;
+//             serde_json::from_reader(f)?
+//         }
 
-    };
-
-
-
-    Err(DeckError::NoDevice)
-    
-}
+//     };
 
 
 
+//     Err(DeckError::NoDevice)
 
-fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut deckjson: DeckJson, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<ButtonDeck<D>> {
+// }
+
+
+
+
+fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut deckjson: DeckJson, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<DeckDeviceSetup> {
 
     let deckid = 42;
 
@@ -444,15 +528,17 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
     // Setups
     // --------------------------------------------------------
 
+    // collect all setup templates
     let setups = device_template.setups
         .or_else(|| deckjson.setups)
         .unwrap_or_else(|| IndexMap::new());
 
+    // collect all button (control) templates
     let controls = device_template.controls
         .or_else(|| deckjson.controls)
         .unwrap_or_else(|| IndexMap::new());
 
-
+    // build 'prep' structs (name, reference, template) for setups
     let setup_refs: Vec<Prep<SetupRef,SetupTemplate>> = setups.iter().enumerate()
         .map(|(i,(n,t))| Prep {
             name: n,
@@ -461,6 +547,7 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
         })
         .collect();
 
+    // build 'prep' structs (name, reference, template) for buttons
     let button_refs: Vec<Prep<ButtonId,ButtonTemplate>> = controls.iter().enumerate()
         .map(|(i,(n,t))| {
             Prep {
@@ -472,23 +559,16 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
         .collect();
 
 
-
+    // collect all functions (rc<refcell<>>) as name,rc tuples in a vec
     let mut functionvec: Vec<(String,Rc<RefCell<ButtonFn<D>>>)> = Vec::new();
     for (n,f) in builder.functions.drain(..) {
         functionvec.push((n, Rc::new(RefCell::new(f))))
     }
 
-
-
-    // let functionvec: Vec<(String,Rc<RefCell<ButtonFn>>)> = builder.functions.into_iter()
-    //     .map(|(n,f)| (n, Rc::new(RefCell::new(f))))
-    //     .collect();
-
+    // create references for the functions
     let function_refs: Vec<FnRef> = functionvec.iter().enumerate()
         .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
         .collect();
-
-//    let function_refs: Vec<NamedRef> = 
 
 
     let mut data = BuilderData {
@@ -572,38 +652,46 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
     // };
 
     // dummy channels
-    let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
-    let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
+    // let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
+    // let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
 
-
-    Ok(ButtonDeck {
-
-        deckid: 42,
-        hidapi: None, // will be filled later
-
+    Ok(DeckDeviceSetup {
         device: Some(any_device),
-        // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
-        folder: PathBuf::from(builder.home_path()),
-        wiring: phys,
-        functions: functionvec,
-        current_key_map: ccm,
         button_arena,
-//         button_map,
-        current_setup: 0,
+        current_key_map: ccm,
+        wiring: phys,
         setup_arena,
-        
-        // dummy!
-        device_event_sender: dvtx,
-        // dummy!
-        deck_event_sender: bdtx,
-        // dummy!
-        deck_event_receiver: Some(bdrx),
-
-        data: builder.data.take(),
-        // deckid: todo!(),
-
-        other: None
+        current_setup: 0,
     })
+
+//     Ok(ButtonDeck {
+
+//         deckid: 42,
+//         hidapi: None, // will be filled later
+
+//         device: Some(any_device),
+//         // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
+//         folder: PathBuf::from(builder.home_path()),
+//         wiring: phys,
+//         functions: functionvec,
+//         current_key_map: ccm,
+//         button_arena,
+// //         button_map,
+//         current_setup: 0,
+//         setup_arena,
+        
+//         // dummy!
+//         device_event_sender: dvtx,
+//         // dummy!
+//         deck_event_sender: bdtx,
+//         // dummy!
+//         deck_event_receiver: Some(bdrx),
+
+//         data: builder.data.take(),
+//         // deckid: todo!(),
+
+//         other: None
+//     })
 
 }
 

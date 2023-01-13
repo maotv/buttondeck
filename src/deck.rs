@@ -18,7 +18,7 @@ use std::time::Duration;
 
 
 use crate::button::ButtonValue;
-use crate::{ButtonId, ButtonColor, StateRef2};
+use crate::{ButtonId, ButtonColor, StateRef2, ButtonDeviceTrait, ButtonDeckBuilder};
 use crate::Button;
 use crate::DeckError;
 use crate::device::{ButtonDevice, discover_streamdeck};
@@ -91,7 +91,10 @@ type NoArgFunc = dyn Fn() -> () + 'static;
 type DeckArgsFunc<D> = dyn FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send + Sync;
 
 // #[derive(Clone)]
-pub struct ButtonFn<D> {
+pub struct ButtonFn<D> 
+    where D: Send + Sync + 'static
+{
+
     pub func: Box<DeckArgsFunc<D>>
 }
 // impl From<NoArgFunc> for ButtonFn {
@@ -100,7 +103,9 @@ pub struct ButtonFn<D> {
 //     }
 // }
 
-impl <D> ButtonFn<D> {
+impl <D> ButtonFn<D> 
+    where D: Send + Sync + 'static
+{
     fn call_fn(&mut self, deck: &mut ButtonDeck<D>, arg: FnArg) {
         if let Err(e) = (self.func)(deck,arg) {
             error!("ButtonFn returned error: {:?}", e);
@@ -187,27 +192,11 @@ impl Display for FnArg {
 }
 
 
-pub struct ButtonDeck<D>
-{
-
-    pub (crate) deckid: usize,
-
-    pub (crate) hidapi: Option<HidApi>,
+// device dependent fields
+pub struct DeckDeviceSetup {
 
     // pub (crate) device: Rc<RefCell<Box<dyn ButtonDevice>>>,
     pub (crate) device: Option<ButtonDevice>,
-
-    // folder with config & icons
-    pub (crate) folder: PathBuf,
-
-    pub (crate) device_event_sender:   Sender<DeviceEvent>,
-
-    pub (crate) deck_event_receiver: Option<Receiver<DeckEvent>>,
-    pub (crate) deck_event_sender:     Sender<DeckEvent>,
-
-
-    pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn<D>>>)>,
-
 
     // The memory arena where all defined buttons live
     pub (crate) button_arena: Vec<Button>,
@@ -218,15 +207,58 @@ pub struct ButtonDeck<D>
     // 
     pub (crate) wiring: Vec<Option<PhysicalKey>>,
 
-
-    // buttons by name
-    // pub (crate) button_map: HashMap<String,ButtonId>,
+    // all setups by name
+    pub (crate) setup_arena: Vec<ButtonSetup>,
 
     // the current, active setup
     pub (crate) current_setup: usize,
 
-    // all setups by name
-    pub (crate) setup_arena: Vec<ButtonSetup>,
+
+
+}
+
+impl Default for DeckDeviceSetup {
+    fn default() -> Self {
+        Self { 
+            device: None,
+            button_arena: Default::default(), 
+            current_key_map: Default::default(), 
+            wiring: Default::default(), 
+            setup_arena: Default::default() ,
+            current_setup: 0
+        }
+    }
+}
+
+
+pub struct ButtonDeck<D>
+    where D: Send + Sync + 'static
+{
+
+    pub (crate) deckid: usize,
+
+    pub (crate) builder: ButtonDeckBuilder<D>,
+
+    pub (crate) hidapi: Option<HidApi>,
+
+
+    // folder with config & icons
+    pub (crate) folder: PathBuf,
+
+    // sender to button device
+    pub (crate) device_event_sender:   Sender<DeviceEvent>,
+
+    // ??? 
+    pub (crate) deck_event_receiver: Option<Receiver<DeckEvent>>,
+
+    // sender to deck (self)
+    pub (crate) deck_event_sender:     Sender<DeckEvent>,
+
+
+    pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn<D>>>)>,
+
+
+    pub (crate) ddsetup: DeckDeviceSetup,
 
     pub data: Option<D>,
 
@@ -238,6 +270,7 @@ pub struct ButtonDeck<D>
 
 
 impl <D> ButtonDeck<D>
+    where D: Send + Sync + 'static
 {
 
     pub fn with_other<X>(&mut self, o: X) 
@@ -247,7 +280,7 @@ impl <D> ButtonDeck<D>
     }
 
 
-    pub fn new() -> Self {
+    pub fn new(b: ButtonDeckBuilder<D>) -> Self {
 
         let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
         let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
@@ -256,23 +289,17 @@ impl <D> ButtonDeck<D>
 
             deckid: 42,
 
+            builder: b,
+
             hidapi: None, // will be filled later
 
-            device: None,
             // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
             folder: PathBuf::default(),
 
-            wiring: vec![],
+            ddsetup: Default::default(),
 
             functions: vec![],
 
-            current_key_map: vec![],
-            button_arena: vec![],
-    //         button_map,
-            current_setup: 0,
-
-            setup_arena: vec![],
-            
             // dummy!
             device_event_sender: dvtx,
             // dummy!
@@ -288,43 +315,43 @@ impl <D> ButtonDeck<D>
     }
 
 
-    pub fn initialize(&mut self) -> Result<()> {
+    // pub fn initialize(&mut self) -> Result<()> {
 
 
-        let (tx_deck_events,rx_deck_events) = mpsc::channel();
+    //     let (tx_deck_events,rx_deck_events) = mpsc::channel();
 
-        let optdev = self.device.take();
-        debug!("Device is: {:?}", optdev.is_some());
-
-
-        if let Some(device) = optdev {
-
-            let tx_to_device = match device {
-                ButtonDevice::Streamdeck(mut sd) => {
-                    sd.start(tx_deck_events.clone())
-                },
-                ButtonDevice::Midi(mut md) => {
-                    md.start(tx_deck_events.clone())
-                },
-            }?;
-
-            self.device_event_sender   = tx_to_device.clone();
-
-            self.deck_event_receiver = Some(rx_deck_events);
-            self.deck_event_sender = tx_deck_events;
+    //     let optdev = self.device.take();
+    //     debug!("Device is: {:?}", optdev.is_some());
 
 
+    //     if let Some(device) = optdev {
 
-            let nr = self.setup_arena[0].reference.clone();
-            self.switch_to_ref(&nr);
+    //         let tx_to_device = match device {
+    //             ButtonDevice::Streamdeck(mut sd) => {
+    //                 sd.start(tx_deck_events.clone())
+    //             },
+    //             ButtonDevice::Midi(mut md) => {
+    //                 md.start(tx_deck_events.clone())
+    //             },
+    //         }?;
 
-            Ok( () )
+    //         self.device_event_sender   = tx_to_device.clone();
 
-        } else {
-            Err(DeckError::NoDevice)
-        }
+    //         self.deck_event_receiver = Some(rx_deck_events);
+    //         self.deck_event_sender = tx_deck_events;
 
-    }
+
+
+    //         let nr = self.ddsetup.setup_arena[0].reference.clone();
+    //         self.switch_to_ref(&nr);
+
+    //         Ok( () )
+
+    //     } else {
+    //         Err(DeckError::NoDevice)
+    //     }
+
+    // }
 
     pub fn get_sender(&self) -> ButtonDeckSender {
         ButtonDeckSender {
@@ -332,65 +359,120 @@ impl <D> ButtonDeck<D>
         }
     }
 
-
-
     pub fn run(&mut self) {
 
-        let optrx = self.deck_event_receiver.take();
-        if optrx.is_none() { return; }
+        let (tx,rx) = mpsc::channel();
 
-        let rx = optrx.expect("checked above");
-
-
-        warn!("##### looooppp");
-
+        let tx_device_to_deck = tx.clone();
+        self.deck_event_sender = tx;
 
         loop {
-            if let Ok(event) = rx.recv() {
-
-                warn!("DeckEvent ...");
-
-                match event {
-                    DeckEvent::Void => {
-                        warn!("Got void event");
-                    },
-                    DeckEvent::FnCall(name, arg) => {
-                        self.call_fn_by_name(&name, arg)
-                    },
-                    DeckEvent::SetState(name, state) => {
-                        warn!("Got set_button_state event {} {}", name, state);
-                        self.set_button_state(&name, &state);
-                    },
-                    DeckEvent::Device(e) => {
-                        self.handle_device_event(e)
-                    },
-                    DeckEvent::Disconnected => {
-                        debug!("Disconnected...");
-                        self.run_reconnect();
-                    }
-                    
-                }
+            
+            if let Err(e) = self.run_once(&rx, tx_device_to_deck.clone()) {
+                error!("buttondeck.run error: {:?}", e);
             }
-        }
 
+            thread::sleep(Duration::from_millis(3000));
+        }
 
     }
 
-    pub fn run_reconnect(&mut self) {
+ 
+    fn run_once(&mut self, rx: &Receiver<DeckEvent>, tx_device_to_deck: Sender<DeckEvent>) -> Result<()> {
 
-        let hidapi = HidApi::new();
+
+        let device = self.run_reconnect();
+        let mut dds = self.builder.build_for_device(device)?;
+
+
+        let opt_device = dds.device.take();
+        self.ddsetup = dds;
+
+        if let Some(device) = opt_device {
+            match device.start(tx_device_to_deck) {
+                Ok(s) => self.device_event_sender = s,
+                Err(e) => error!("device start error {:?}", e),
+            }
+        }
+        
+        let nr = self.ddsetup.setup_arena[0].reference.clone();
+        self.switch_to_ref(&nr);
 
         loop {
-            debug!("Reconnect...");
-           
-            match discover_streamdeck(&mut self.hidapi) {
-                Ok(_) => {
 
-                },
-                Err(_) => {
+            match rx.recv() {
 
+                Ok(event) => {
+                    match self.run_event(event) {
+                        Ok(_) => (),
+                        Err(DeckError::Disconnected) => {
+                            break;
+                        }
+                        Err(e) => {
+                            error!("event handling error: {:?}", e)
+                        },
+                    }
+                }
+                Err(e) => {
+                    error!("event recv error: {:?}", e)
                 },
             }
+        }
+
+        Ok(())
+
+    }
+   
+
+
+
+    fn run_event(&mut self, event: DeckEvent) -> Result<()>{
+
+        warn!("DeckEvent ...");
+        
+        match event {
+
+            DeckEvent::Void => {
+                warn!("Got void event");
+            },
+            DeckEvent::FnCall(name, arg) => {
+                self.call_fn_by_name(&name, arg)
+            },
+            DeckEvent::SetState(name, state) => {
+                warn!("Got set_button_state event {} {}", name, state);
+                self.set_button_state(&name, &state);
+            },
+            DeckEvent::Device(e) => {
+                self.handle_device_event(e)
+            },
+            DeckEvent::Disconnected => {
+                debug!("Disconnected...");
+                return Err(DeckError::Disconnected);
+            }
+        }
+
+        Ok(())
+    }
+
+
+
+
+
+    fn run_reconnect(&mut self) -> ButtonDevice {
+
+        loop {
+            debug!("Reconnect Loop...");
+           
+            match discover_streamdeck(&mut self.hidapi) {
+                Ok(sd) => { 
+                    debug!("found device!!! {}", sd.model());
+                    return sd;
+                },
+                Err(e) => {
+                    error!("e? {:?}",e)
+                },
+            }
+
             thread::sleep(Duration::from_millis(3000));
         }
 
@@ -418,7 +500,7 @@ impl <D> ButtonDeck<D>
 
 
     pub fn switch_to(&mut self, setup_name: &str) {
-        let su =  self.setup_arena.iter().map(|s| &s.reference).find(|s| s.name == setup_name).cloned();
+        let su =  self.ddsetup.setup_arena.iter().map(|s| &s.reference).find(|s| s.name == setup_name).cloned();
         if let Some(r) = su {
             self.switch_to_ref(&r)
         }        
@@ -426,7 +508,7 @@ impl <D> ButtonDeck<D>
  
      pub fn switch_to_default(&mut self) {
 
-        let sref = self.setup_arena.get(0).cloned();
+        let sref = self.ddsetup.setup_arena.get(0).cloned();
 
         if let Some(s) = sref {
             self.switch_to_ref(&s.reference);
@@ -440,12 +522,12 @@ impl <D> ButtonDeck<D>
         debug!("switch_to {:?}", setup);
 
         // cleanup connections to physical buttons
-        for b in &mut self.button_arena {
+        for b in &mut self.ddsetup.button_arena {
             b.physical = None;
         }
 
-        if let Some(s) = self.setup_arena.get(setup.id) {
-            self.current_setup = setup.id;
+        if let Some(s) = self.ddsetup.setup_arena.get(setup.id) {
+            self.ddsetup.current_setup = setup.id;
         } else {
             warn!("cannot find setup '{}'", setup.name)
         }
@@ -455,10 +537,10 @@ impl <D> ButtonDeck<D>
 
     pub fn init_setup(&mut self) {
 
-        debug!("init_setup {}", self.current_setup);
+        debug!("init_setup {}", self.ddsetup.current_setup);
 
         // FIXME do this without cloning buttonsetup
-        if let Some(bs) = self.setup_arena.get(self.current_setup).cloned() {
+        if let Some(bs) = self.ddsetup.setup_arena.get(self.ddsetup.current_setup).cloned() {
             for b in &bs.mapping {
                 self.init_button(b);
             }
@@ -470,7 +552,7 @@ impl <D> ButtonDeck<D>
 
         debug!("init_button {:?} {:?}", mapping.key, mapping.button);
 
-        self.current_key_map[mapping.key.id] = Some(mapping.clone());
+        self.ddsetup.current_key_map[mapping.key.id] = Some(mapping.clone());
         {
             let bb = self.button_mut(mapping.button)?;
             bb.physical = Some(mapping.key.clone());
@@ -610,7 +692,7 @@ impl <D> ButtonDeck<D>
 
     pub fn button_id_from_name(&self, bname: &str) -> Result<ButtonId> {
         // self.button_map.get(button).cloned()
-        self.button_arena.iter().enumerate()
+        self.ddsetup.button_arena.iter().enumerate()
             .find(|(i,b)| b.name == bname)
             .map(|(i,b)| ButtonId::new(self.deckid, i))
             .ok_or_else(|| DeckError::InvalidRef)
@@ -647,7 +729,7 @@ impl <D> ButtonDeck<D>
 
 
     fn button(&self, id: ButtonId) -> Result<&Button> {
-        self.button_arena
+        self.ddsetup.button_arena
             .get(id.id())
             .ok_or(DeckError::InvalidRef)
     }
@@ -655,7 +737,7 @@ impl <D> ButtonDeck<D>
     fn button_mut(&mut self, id: ButtonId) -> Result<&mut Button> {
 
 
-        self.button_arena
+        self.ddsetup.button_arena
             .get_mut(id.id())
             .ok_or(DeckError::InvalidRef)
 
@@ -665,7 +747,7 @@ impl <D> ButtonDeck<D>
 
         debug!("on_button_down #{}", index);
         
-        let btn = match self.current_key_map.get(index) {
+        let btn = match self.ddsetup.current_key_map.get(index) {
             Some(om) => match om {
                 Some(m) => Some(m.button.clone()),
                 None => None
@@ -703,7 +785,7 @@ impl <D> ButtonDeck<D>
 
         debug!("on_button_up #{}", index);
 
-        let btn = match self.current_key_map.get(index) {
+        let btn = match self.ddsetup.current_key_map.get(index) {
             Some(om) => match om {
                 Some(m) => Some(m.button.clone()),
                 None => None

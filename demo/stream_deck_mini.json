@@ -3,12 +3,12 @@
     "label": "Stream Deck Mini",
 
     "wiring": {
-        "A1": { "id": 0, "kind": "sdkey" },
-        "B1": { "id": 1, "kind": "sdkey" },
-        "C1": { "id": 2, "kind": "sdkey" },
-        "A2": { "id": 3, "kind": "sdkey" },
-        "B2": { "id": 4, "kind": "sdkey" },
-        "C2": { "id": 5, "kind": "sdkey" }
+        "A1": { "id": 1, "kind": "sdkey" },
+        "B1": { "id": 2, "kind": "sdkey" },
+        "C1": { "id": 3, "kind": "sdkey" },
+        "A2": { "id": 4, "kind": "sdkey" },
+        "B2": { "id": 5, "kind": "sdkey" },
+        "C2": { "id": 6, "kind": "sdkey" }
     },
 
     "setups": {        

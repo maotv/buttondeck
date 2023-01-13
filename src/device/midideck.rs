@@ -124,16 +124,6 @@ impl MidiDevice {
     }
 */
 
-    pub fn start(self, send: mpsc::Sender<DeckEvent>) -> super::Result<mpsc::Sender<DeviceEvent>> {
-        let (tx,rx) = mpsc::channel();
-        info!("midideck start");
-
-        thread::spawn(move || {
-            readwrite_thread(self, rx, send);
-        });
-
-        Ok(tx)
-    }
 
 }
 
@@ -144,6 +134,18 @@ impl ButtonDeviceTrait for MidiDevice {
        self.model.clone()
     }
 
+
+    fn start(self, send: mpsc::Sender<DeckEvent>) -> super::Result<mpsc::Sender<DeviceEvent>> {
+        
+        let (tx,rx) = mpsc::channel();
+        info!("midideck start");
+
+        thread::spawn(move || {
+            readwrite_thread(self, rx, send);
+        });
+
+        Ok(tx)
+    }
 
     
 }

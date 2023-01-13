@@ -14,6 +14,8 @@ pub enum DeckError {
     InvalidKey(String),
     #[error("no directory")]
     NoDirectory,
+    #[error("disconnected")]
+    Disconnected,
     #[error("no device")]
     NoDevice,
     #[error("io error: `{0}`")]
