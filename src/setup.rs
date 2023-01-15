@@ -137,6 +137,7 @@ pub struct ButtonDeckBuilder<D>
     midi_out: Option<String>,
     data: Option<D>,
     functions: Vec<(String,ButtonFn<D>)>,
+    function_refs: Vec<FnRef>,
 }
 
 impl <D> ButtonDeckBuilder<D> 
@@ -154,6 +155,7 @@ impl <D> ButtonDeckBuilder<D>
             midi_in: None,
             midi_out: None,
             functions: Vec::new(),
+            function_refs: Vec::new(),
                 }
     }
 
@@ -241,27 +243,41 @@ impl <D> ButtonDeckBuilder<D>
             .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
             .collect();
 
+        self.function_refs = function_refs;
+
         // dummy channels
         let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
-        let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
+        let (send_to_deck,deck_receiver) = std::sync::mpsc::channel::<DeckEvent>();
+
+
+
+        let hapi = if self.hidapi.is_some() {
+            self.hidapi.take()
+        } else {
+            HidApi::new().ok()
+        };
 
         Ok(ButtonDeck {
 
             deckid: idgen.fetch_add(1, Ordering::SeqCst),
 
-            hidapi: self.hidapi.take(),
+            hidapi: hapi,
 
             // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
             folder: PathBuf::from(self.home_path()),
             ddsetup: Default::default(),
+
+
             functions: functionvec,
-            
+            // func_refs: function_refs,
+
+
             // dummy!
             device_event_sender: dvtx,
             // dummy!
-            deck_event_sender: bdtx,
+            deck_event_sender: send_to_deck,
             // dummy!
-            deck_event_receiver: Some(bdrx), // TODO FIXME no option needed
+            deck_event_receiver: Some(deck_receiver),
 
             data: self.data.take(),
 
@@ -461,7 +477,7 @@ struct Prep<'a,R,T> {
 
 fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut deckjson: DeckJson, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<DeckDeviceSetup> {
 
-    let deckid = 42;
+     let deckid = idgen.fetch_add(1, Ordering::SeqCst);
 
 
     // debug!("setup::build_buttondeck {:?} with dir {:?}", &device.model(), home_folder);
@@ -559,16 +575,18 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
         .collect();
 
 
-    // collect all functions (rc<refcell<>>) as name,rc tuples in a vec
-    let mut functionvec: Vec<(String,Rc<RefCell<ButtonFn<D>>>)> = Vec::new();
-    for (n,f) in builder.functions.drain(..) {
-        functionvec.push((n, Rc::new(RefCell::new(f))))
-    }
+    // // collect all functions (rc<refcell<>>) as name,rc tuples in a vec
+    // let mut functionvec: Vec<(String,Rc<RefCell<ButtonFn<D>>>)> = Vec::new();
+    // for (n,f) in builder.functions.drain(..) {
+    //     functionvec.push((n, Rc::new(RefCell::new(f))))
+    // }
 
-    // create references for the functions
-    let function_refs: Vec<FnRef> = functionvec.iter().enumerate()
-        .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
-        .collect();
+    // // create references for the functions
+    // let function_refs: Vec<FnRef> = functionvec.iter().enumerate()
+    //     .map(|(i,(n,f))| FnRef{ id: i, name: String::from(n) })
+    //     .collect();
+
+    let function_refs = builder.function_refs.iter().map(|i| i.clone()).collect();
 
 
     let mut data = BuilderData {

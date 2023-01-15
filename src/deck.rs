@@ -256,6 +256,7 @@ pub struct ButtonDeck<D>
 
 
     pub (crate) functions: Vec<(String,Rc<RefCell<ButtonFn<D>>>)>,
+    // pub (crate) func_refs: Vec<FnRef>,
 
 
     pub (crate) ddsetup: DeckDeviceSetup,
@@ -280,39 +281,41 @@ impl <D> ButtonDeck<D>
     }
 
 
-    pub fn new(b: ButtonDeckBuilder<D>) -> Self {
+    // pub fn new(b: ButtonDeckBuilder<D>) -> Self {
 
-        let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
-        let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
+    //     let (dvtx,dvrx) = std::sync::mpsc::channel::<DeviceEvent>(); 
+    //     let (bdtx,bdrx) = std::sync::mpsc::channel::<DeckEvent>();
     
-        ButtonDeck {
+    //     ButtonDeck {
 
-            deckid: 42,
+    //         deckid: 0,
 
-            builder: b,
+    //         builder: b,
 
-            hidapi: None, // will be filled later
+    //         hidapi: None, // will be filled later
 
-            // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
-            folder: PathBuf::default(),
+    //         // device: xdev, // Rc::new(RefCell::new(Box::new(device))),
+    //         folder: PathBuf::default(),
 
-            ddsetup: Default::default(),
+    //         ddsetup: Default::default(),
 
-            functions: vec![],
+    //         functions: Vec::new(),
 
-            // dummy!
-            device_event_sender: dvtx,
-            // dummy!
-            deck_event_sender: bdtx,
-            // dummy!
-            deck_event_receiver: Some(bdrx),
+    //         // func_refs: Vec::new(),
 
-            data: None,
+    //         // dummy!
+    //         device_event_sender: dvtx,
+    //         // dummy!
+    //         deck_event_sender: bdtx,
+    //         // dummy!
+    //         deck_event_receiver: Some(bdrx),
+
+    //         data: None,
             
-            other: None,
+    //         other: None,
 
-        }
-    }
+    //     }
+    // }
 
 
     // pub fn initialize(&mut self) -> Result<()> {
@@ -361,14 +364,14 @@ impl <D> ButtonDeck<D>
 
     pub fn run(&mut self) {
 
-        let (tx,rx) = mpsc::channel();
 
-        let tx_device_to_deck = tx.clone();
-        self.deck_event_sender = tx;
+        let tx_device_to_deck = self.deck_event_sender.clone();
+        let receiver = self.deck_event_receiver.take().expect("it is fatal if we dont have a receiver here");
+        // self.deck_event_sender = tx;
 
         loop {
             
-            if let Err(e) = self.run_once(&rx, tx_device_to_deck.clone()) {
+            if let Err(e) = self.run_once(&receiver, tx_device_to_deck.clone()) {
                 error!("buttondeck.run error: {:?}", e);
             }
 
@@ -403,6 +406,7 @@ impl <D> ButtonDeck<D>
             match rx.recv() {
 
                 Ok(event) => {
+                    debug!("Got event: {:?}", "??");
                     match self.run_event(event) {
                         Ok(_) => (),
                         Err(DeckError::Disconnected) => {
@@ -469,7 +473,7 @@ impl <D> ButtonDeck<D>
                     return sd;
                 },
                 Err(e) => {
-                    error!("e? {:?}",e)
+                    warn!("e? {:?}",e)
                 },
             }
 
@@ -758,19 +762,27 @@ impl <D> ButtonDeck<D>
         
         if let Some(br) = btn {
 
+            debug!("on_button_down id={:?}", br);
+
             let opt_fr = self.button(br)?.effective_button_down().cloned();
             
             if let Some(fr) = opt_fr {
+                debug!("a");
                 self.call_fn(&fr, br);
             }
 
+            debug!("aa");
             
             let switched = self.button_mut(br)?.switch_state_action();
+            debug!("ab");
             if switched {
+                debug!("b");
                 self.decorate_button(br)?;
             }
 
             if let Some(s) = self.button_mut(br)?.effective_switch_deck_setup().cloned() {
+                debug!("c");
+
                 self.switch_to_ref(&s);
             }
 
