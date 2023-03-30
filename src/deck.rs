@@ -17,7 +17,7 @@ use std::thread;
 use std::time::Duration;
 
 
-use crate::button::ButtonValue;
+use crate::button::{ButtonValue, ButtonImage};
 use crate::{ButtonId, ButtonColor, StateRef2, ButtonDeviceTrait, ButtonDeckBuilder};
 use crate::Button;
 use crate::DeckError;
@@ -30,12 +30,15 @@ use std::sync::mpsc::{self, Receiver, Sender};
 type Result<T> = std::result::Result<T,DeckError>;
 
 
+#[derive(Debug)]
 pub enum DeckEvent {
     Void,
     Disconnected,
     Device(DeviceEvent),
     FnCall(String, FnArg),
-    SetState(String,String)
+    SetState(String,String),
+    SetImage(String,Option<ButtonImage>),
+    SetValue(String,ButtonValue)
 }
 
 
@@ -146,9 +149,27 @@ pub struct ButtonDeckSender {
 }
 
 impl ButtonDeckSender {
+    
     pub fn send(&self, event: DeckEvent) {
         self.sender.send(event);
     }
+
+    pub fn set_image_from_file(&self, button: &str, file: &str) -> Result<()> {
+        let image = ButtonImage::from_path(file);
+        self.send(DeckEvent::SetImage(String::from(button), image));
+        Ok(())
+    }
+
+    pub fn set_image(&self, button: &str, image: Option<ButtonImage>) -> Result<()> {
+        self.send(DeckEvent::SetImage(String::from(button), image));
+        Ok(())
+    }
+
+    pub fn set_value(&self, button: &str, value: ButtonValue) -> Result<()> {
+        self.send(DeckEvent::SetValue(String::from(button), value));
+        Ok(())
+    }
+
 }
 
 
@@ -406,7 +427,7 @@ impl <D> ButtonDeck<D>
             match rx.recv() {
 
                 Ok(event) => {
-                    debug!("Got event: {:?}", "??");
+                    debug!("Got event: {:?}", event);
                     match self.run_event(event) {
                         Ok(_) => (),
                         Err(DeckError::Disconnected) => {
@@ -453,6 +474,12 @@ impl <D> ButtonDeck<D>
                 debug!("Disconnected...");
                 return Err(DeckError::Disconnected);
             }
+            DeckEvent::SetImage(name, image) => {
+                self.set_button_icon(&name, "default", image)?;
+            },
+            DeckEvent::SetValue(name, value) => {
+                self.set_button_value(&name, "default", value)?;
+            },
         }
 
         Ok(())
@@ -609,14 +636,6 @@ impl <D> ButtonDeck<D>
     pub fn set_button_state(&mut self, name: &str, state: &str) -> Result<()> {
 
         let bid = self.button_id_from_name(name)?;
-        // let sr = match self.button(bid) {
-        //     Ok(b) => {
-        //         b.get_state_ref2(state)
-        //     }
-        //     Err(_) => {
-        //         None
-        //     }
-        // };
 
         if let Ok(b) = self.button_mut(bid) {
             if b.switch_state(state) {
@@ -647,6 +666,34 @@ impl <D> ButtonDeck<D>
         //     }
         // }
     }
+
+    pub fn set_button_icon(&mut self, button: &str, state_name: &str, icon: Option<ButtonImage>) -> Result<()> {
+
+        let bid = self.button_id_from_name(button)?;
+
+        if let Ok(b) = self.button_mut(bid) {
+            b.set_state_image(state_name, icon);
+
+        }
+
+        self.decorate_button(bid)?;
+        Ok(())
+
+    }
+
+    pub fn set_button_value(&mut self, button: &str, state_name: &str, value: ButtonValue) -> Result<()> {
+
+        let bid = self.button_id_from_name(button)?;
+
+        if let Ok(b) = self.button_mut(bid) {
+            b.set_state_value(state_name, value);
+
+        }
+
+        Ok(())
+
+    }
+
 
     pub fn set_button_color(&mut self, button: ButtonId, state: StateRef2, color: ButtonColor) {
     }

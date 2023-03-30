@@ -173,6 +173,7 @@ impl <D> ButtonDeckBuilder<D>
         self
     }
 
+
     pub fn with_data(mut self, data: D) -> Self {
         self.data = Some(data);
         self
@@ -637,8 +638,8 @@ fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut dec
 
                 if let Some(button) = button_arena.get(br.id()) {
 
-                    let s = rt.state.clone().and_then(|n| button.get_state_ref(&n) );
-                    let s2 = s.map(|x| StateRef2::Id(0, x.id));
+                    let s2 = rt.state.clone().and_then(|n| button.get_state_ref2(&n) );
+                    // let s2 = s.map(|x| StateRef2::Id(0, x.id));
                     // let s = button.get_state_ref(&rt.state);
 
                     if let Some(pk) = p {

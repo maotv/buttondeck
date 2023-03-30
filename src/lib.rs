@@ -27,6 +27,7 @@ pub use button::ButtonId;
 pub use button::StateRef2;
 pub use button::ButtonColor;
 pub use button::ButtonState;
+pub use button::ButtonImage;
 
 
 #[macro_export]

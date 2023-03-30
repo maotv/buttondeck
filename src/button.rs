@@ -61,73 +61,9 @@ impl ButtonId {
     }
 }
 
-// #[derive(Clone,Debug)]
-// pub enum ButtonRef {
-//     // owner, index
-//     Id(usize,usize),
-//     Name(String)
-// }
-
-// impl ButtonRef {
-//     pub fn id(&self) -> Result<usize> {
-//         match self {
-//             ButtonRef::Id(_, id) => Ok(*id),
-//             ButtonRef::Name(_) => Err(DeckError::InvalidRef),
-//         }
-//     }
-
-
-// }
-
-// impl From<&str> for ButtonRef {
-//     fn from(s: &str) -> Self {
-//         ButtonRef::Name(String::from(s))
-//     }
-// }
-
-// impl AsRef<ButtonRef> for ButtonRef {
-//     fn as_ref(&self) -> &ButtonRef {
-//         self
-//     }
-// }
-
-
-
-
-
-
-// impl <'a> AsRef<ButtonRef<'a>> for String {
-//     fn as_ref(&self) -> ButtonRef<'a> {
-//         ButtonRef::Name(&self)
-//     }
-// }
-
-// #[derive(Clone,Debug)]
-// pub struct ButtonRef {
-//     pub (crate) id: usize,
-//     pub (crate) state: Option<StateRef>
-// }
-
-// impl ButtonRef {
-//     pub (crate) fn clone_with_state(&self, state: Option<StateRef>) -> Self {
-//         ButtonRef { 
-//             id: self.id,
-//             state
-//         }
-//     }
-// }
-
-// impl AsRef<ButtonRef> for ButtonRef {
-//     fn as_ref(&self) -> &ButtonRef {
-//         self
-//     }
-// }
-
 
 pub struct Button
 {
-    // pub (crate) newrwf: ButtonRef,
-
     // a private, unique id
     pub (crate) reference:  usize,
 
@@ -140,6 +76,7 @@ pub struct Button
 
     pub (crate) default_state: usize,
     pub (crate) current_state: usize,
+
     pub (crate) states: Vec<(String,ButtonState)>,
 
 }
@@ -170,16 +107,81 @@ impl Button {
 
     }
 
-    pub fn get_state_ref(&self, name: &str) -> Option<StateRef> {
-        self.states.iter().find(|(n,s)| n == name)
-            .map(|(_,s)| s.reference.clone())
+
+    pub fn state_by_ref_mut<'a>(&'a mut self, sref: StateRef2) -> Option<&'a mut ButtonState> {
+
+        match sref {
+            StateRef2::Id(bid, sid) => {
+//                 if bid != self.reference { return None }
+                match self.states.get_mut(sid) {
+                    Some(s) => Some(&mut s.1),
+                    None => None
+                }
+            },
+            StateRef2::Name(name) => {
+                let x = self.states.iter_mut().enumerate()
+                    .find(|(i,(n,s))| n == &name)
+                    .map(|(i, (n,s))| s);
+
+                x
+            }
+        }
+
     }
+
+
+    pub fn state_by_name_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut ButtonState> {
+        let bid = self.reference;
+        self.states.iter_mut()
+            .find(|(n,s)| n == name)
+            .map(|(i,s)| s)
+    }
+
+
+    pub fn state_by_id<'a>(&'a self, id: usize) -> Option<&'a ButtonState> {
+
+        match self.states.get(id) {
+            Some(s) => Some(&s.1),
+            None => None
+        }
+
+    }
+
+
+
+    // pub fn get_state_ref(&self, name: &str) -> Option<StateRef> {
+    //     self.states.iter().find(|(n,s)| n == name)
+    //         .map(|(_,s)| s.reference.clone())
+    // }
 
     pub fn get_state_ref2(&self, name: &str) -> Option<StateRef2> {
         let bid = self.reference;
         self.states.iter().enumerate().find(|(i,(n,s))| n == name)
             .map(|(i,s)| StateRef2::Id(bid, i))
     }
+
+    pub fn set_state_image(&mut self, state_name: &str, icon: Option<ButtonImage>) -> Result<()> {
+
+
+        if let Some(s) = self.state_by_name_mut(state_name) {
+            s.image = icon;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_state_value(&mut self, state_name: &str, value: ButtonValue) -> Result<()> {
+
+        if let Some(s) = self.state_by_name_mut(state_name) {
+            s.value = value
+        }
+
+        Ok(())
+
+    }
+
+
+
 
     pub fn switch_state(&mut self, next_state: &str) -> bool {
         if let Some(s) = self.get_state_ref2(next_state) {
@@ -366,6 +368,19 @@ pub struct ButtonImage {
 }
 
 impl ButtonImage {
+    pub fn from_path(s: &str) -> Option<Self> {
+
+        let p = PathBuf::from(s);
+        if p.exists() {
+            Some(ButtonImage {
+                path: PathBuf::from(s)
+            })
+        } else {
+            None
+        }
+    }
+
+
     pub fn from_option_string(folder: &Path, s: &Option<String>) -> Option<Self> {
         if let Some(c) = s {
             Some(ButtonImage {
