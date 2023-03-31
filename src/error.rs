@@ -1,6 +1,9 @@
 
+
 use midir::{MidiInput, MidiOutput};
 use thiserror::Error;
+
+use crate::device::DeviceEvent;
 
 #[derive(Error,Debug)]
 pub enum DeckError {
@@ -34,4 +37,6 @@ pub enum DeckError {
     MidiConnectInputError(#[from] midir::ConnectError<MidiInput>),
     #[error("MidiConnectOutputError")]
     MidiConnectOutputError(#[from] midir::ConnectError<MidiOutput>),
+    #[error("MpscSendError")]
+    SendDeviceEventError(#[from] std::sync::mpsc::SendError<DeviceEvent>),
 }

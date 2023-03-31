@@ -19,7 +19,7 @@ static idgen: AtomicUsize = AtomicUsize::new(1);
 #[derive(Default,Serialize,Deserialize)]
 struct DeckJson {
 
-    home:     Option<String>,
+    assets:   Option<String>,
 
     midi_in:  Option<String>,
     midi_out: Option<String>,
@@ -192,6 +192,18 @@ impl <D> ButtonDeckBuilder<D>
             let bf = ButtonFn { func: Box::new(function) };
             // let mut fa = self.functions;
             self.functions.push((String::from(name),bf));
+        }
+
+
+        self
+    }
+
+    pub fn with_connect<F>(mut self, function: F) -> Self 
+        where F: FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send + Sync + 'static
+    {
+        {
+            let bf = ButtonFn { func: Box::new(function) };
+            self.functions.push((String::from("__connect"),bf));
         }
 
 
@@ -478,8 +490,8 @@ struct Prep<'a,R,T> {
 
 fn  build_buttondeck<D: Send + Sync>(builder: &mut ButtonDeckBuilder<D>, mut deckjson: DeckJson, any_device: ButtonDevice /* , functions: Vec<ButtonFn>, path: P */)  -> Result<DeckDeviceSetup> {
 
-     let deckid = idgen.fetch_add(1, Ordering::SeqCst);
-
+    let deckid = idgen.fetch_add(1, Ordering::SeqCst);
+    builder.home = deckjson.assets.map(|s| PathBuf::from(s));
 
     // debug!("setup::build_buttondeck {:?} with dir {:?}", &device.model(), home_folder);
     let device: &dyn ButtonDeviceTrait = match &any_device {

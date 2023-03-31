@@ -436,6 +436,20 @@ pub enum ButtonValue {
     Error(String)
 }
 
+impl From<String> for ButtonValue {
+    fn from(s: String) -> Self {
+        ButtonValue::String(s)
+    }
+}
+
+impl From<&str> for ButtonValue {
+    fn from(s: &str) -> Self {
+        ButtonValue::String(String::from(s))
+    }
+}
+
+
+
 impl From<Value> for ButtonValue {
     fn from(v: Value) -> Self {
         match v {

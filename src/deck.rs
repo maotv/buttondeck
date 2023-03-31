@@ -422,6 +422,9 @@ impl <D> ButtonDeck<D>
         let nr = self.ddsetup.setup_arena[0].reference.clone();
         self.switch_to_ref(&nr);
 
+
+        self.call_fn_by_name("__connect", FnArg::None);
+
         loop {
 
             match rx.recv() {
@@ -614,11 +617,11 @@ impl <D> ButtonDeck<D>
         if let Some(pk) = key {
             debug!("key is {:?}", &pk);
             if let Some(c) = color {
-                self.device_event_sender.send(DeviceEvent::SetColor(pk.id, c.clone()));
+                self.device_event_sender.send(DeviceEvent::SetColor(pk.id, c.clone()))?;
             }
             if let Some(c) = image {
                 debug!("image is {:?}", &c);
-                self.device_event_sender.send(DeviceEvent::SetImage(pk.id, c.clone()));
+                self.device_event_sender.send(DeviceEvent::SetImage(pk.id, c.clone()))?;
             }
         }
 
@@ -717,7 +720,7 @@ impl <D> ButtonDeck<D>
         
         if let Some(f) = opt_func {
             debug!("    call_fn");
-            f.borrow_mut().call_fn(self,arg);
+            f.borrow_mut().call_fn(self, arg);
         } else {
             warn!("Missing Function: {}", name);
         }
