@@ -1,4 +1,4 @@
-use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg, StateRef2, ButtonId};
+use buttondeck::{DeckError, ButtonDeck, ButtonFn, ButtonDeckBuilder, DeviceKind, DeckEvent, ButtonDeckSender, FnArg, ButtonId};
 use log::{error, warn, info};
 use std::{thread, time::Duration, io, sync::{atomic::{AtomicIsize, AtomicUsize, Ordering}, Arc}, path::Path};
 
@@ -14,9 +14,9 @@ fn mute_notify<D>(d: &mut ButtonDeck<D>, e: FnArg) -> Result<()>
     let bid = d.button_id_from_name("mute")?;
 
     if e.as_bool() {
-        d.set_button_state_with_id(bid, &StateRef2::from("on"))
+        d.set_button_state_with_name(bid, "on")
     } else {
-        d.set_button_state_with_id(bid, &StateRef2::from("off"))
+        d.set_button_state_with_name(bid, "off")
     }
     
     Ok(())

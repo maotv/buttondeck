@@ -4,28 +4,24 @@ use log::error;
 use log::{debug, warn};
 
 use std::any::Any;
-use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::fmt::Display;
-use std::path::Path;
 use std::path::PathBuf;
-
 use std::rc::Rc;
-use std::str::FromStr;
 use std::thread;
 use std::time::Duration;
 
 
 use crate::button::{ButtonValue, ButtonImage};
-use crate::{ButtonId, ButtonColor, StateRef2, ButtonDeviceTrait, ButtonDeckBuilder};
+use crate::{ButtonId, ButtonColor, ButtonDeckBuilder, DeckId, StateId};
 use crate::Button;
 use crate::DeckError;
 use crate::device::{ButtonDevice, discover_streamdeck};
 use crate::device::PhysicalKey;
 use crate::device::DeviceEvent;
-use std::sync::mpsc::{self, Receiver, Sender};
+use std::sync::mpsc::{Receiver, Sender};
 
+use crate::SetupId;
 
 type Result<T> = std::result::Result<T,DeckError>;
 
@@ -48,20 +44,6 @@ pub struct FnRef {
     pub id:   usize,
     pub name: String,
 }
-
-
-#[derive(Clone,Debug)]
-pub struct SetupRef {
-    pub id: usize,
-    pub name: String
-}
-
-impl Default for SetupRef {
-    fn default() -> Self {
-        Self { id: 0, name: String::from("default") }
-    }
-}
-
 
 
 // #[derive(Clone,Debug)]
@@ -97,14 +79,8 @@ type DeckArgsFunc<D> = dyn FnMut(&mut ButtonDeck<D>, FnArg) -> Result<()> + Send
 pub struct ButtonFn<D> 
     where D: Send + Sync + 'static
 {
-
     pub func: Box<DeckArgsFunc<D>>
 }
-// impl From<NoArgFunc> for ButtonFn {
-//     fn from(x: NoArgFunc) -> Self {
-//         todo!()
-//     }
-// }
 
 impl <D> ButtonFn<D> 
     where D: Send + Sync + 'static
@@ -119,18 +95,17 @@ impl <D> ButtonFn<D>
 
 
 /// the buttons on the device
-#[derive(Default)]
 pub struct ButtonSetup {
-
-    pub (crate) reference: SetupRef,
-//    pub (crate) name: String,
+    pub (crate) id: SetupId,
+    pub (crate) name: String,
     pub (crate) mapping: Vec<ButtonMapping>
 }
 
 impl Clone for ButtonSetup {
     fn clone(&self) -> Self {
         ButtonSetup {
-            reference: self.reference.clone(),
+            id: self.id.clone(),
+            name: self.name.clone(),
             mapping: self.mapping.iter().map(|b| b.clone()).collect()
         }
     }
@@ -140,7 +115,7 @@ impl Clone for ButtonSetup {
 pub struct ButtonMapping {
     pub key:    PhysicalKey,
     pub button: ButtonId,
-    pub state:  Option<StateRef2>
+    pub state:  Option<StateId>
 }
 
 
@@ -256,7 +231,7 @@ pub struct ButtonDeck<D>
     where D: Send + Sync + 'static
 {
 
-    pub (crate) deckid: usize,
+    pub (crate) id: DeckId,
 
     pub (crate) builder: ButtonDeckBuilder<D>,
 
@@ -419,7 +394,7 @@ impl <D> ButtonDeck<D>
             }
         }
         
-        let nr = self.ddsetup.setup_arena[0].reference.clone();
+        let nr = self.ddsetup.setup_arena[0].id.clone();
         self.switch_to_ref(&nr);
 
 
@@ -534,7 +509,11 @@ impl <D> ButtonDeck<D>
 
 
     pub fn switch_to(&mut self, setup_name: &str) {
-        let su =  self.ddsetup.setup_arena.iter().map(|s| &s.reference).find(|s| s.name == setup_name).cloned();
+        let su =  self.ddsetup.setup_arena.iter()
+            .find(|s| s.name == setup_name)
+            .map(|s| s.id);
+//             .map(|s| &s.id).find(|s| s.name == setup_name).cloned();
+
         if let Some(r) = su {
             self.switch_to_ref(&r)
         }        
@@ -545,13 +524,13 @@ impl <D> ButtonDeck<D>
         let sref = self.ddsetup.setup_arena.get(0).cloned();
 
         if let Some(s) = sref {
-            self.switch_to_ref(&s.reference);
+            self.switch_to_ref(&s.id);
         }
 
     }
  
   
-    pub fn switch_to_ref(&mut self, setup: &SetupRef) {
+    pub fn switch_to_ref(&mut self, setup: &SetupId) {
 
         debug!("switch_to {:?}", setup);
 
@@ -560,10 +539,10 @@ impl <D> ButtonDeck<D>
             b.physical = None;
         }
 
-        if let Some(s) = self.ddsetup.setup_arena.get(setup.id) {
-            self.ddsetup.current_setup = setup.id;
+        if let Some(s) = self.ddsetup.setup_arena.get(setup.index) {
+            self.ddsetup.current_setup = setup.index;
         } else {
-            warn!("cannot find setup '{}'", setup.name)
+            warn!("cannot find setup '{:?}'", setup)
         }
 
         self.init_setup();
@@ -593,7 +572,7 @@ impl <D> ButtonDeck<D>
 
             // let km = self.wiring.get_mut(mapping.key.id);
 
-            if let Some(bs) = &mapping.state {
+            if let Some(bs) = mapping.state {
                 debug!("=> Switch state to {:?}", bs);
                 bb.switch_state2(bs);
             }
@@ -641,7 +620,7 @@ impl <D> ButtonDeck<D>
         let bid = self.button_id_from_name(name)?;
 
         if let Ok(b) = self.button_mut(bid) {
-            if b.switch_state(state) {
+            if b.switch_state_by_name(state) {
                 self.decorate_button(bid);
             }
         }
@@ -650,14 +629,18 @@ impl <D> ButtonDeck<D>
         Ok(())
     }
 
+    pub fn set_button_state_with_name(&mut self, button: ButtonId, state: &str) {
+// FIXME
+    }
 
-    pub fn set_button_state_with_id(&mut self, button: ButtonId, state: &StateRef2) 
+
+    pub fn set_button_state_with_id(&mut self, button: ButtonId, state: StateId) 
     {
 
 //         let bref = button.
 
         if let Ok(b) = self.button_mut(button) {
-            if b.switch_state2(state.as_ref()) {
+            if b.switch_state2(state) {
                 self.decorate_button(button);
             }
         }
@@ -698,7 +681,7 @@ impl <D> ButtonDeck<D>
     }
 
 
-    pub fn set_button_color(&mut self, button: ButtonId, state: StateRef2, color: ButtonColor) {
+    pub fn set_button_color(&mut self, button: ButtonId, state: StateId, color: ButtonColor) {
     }
 
     pub fn set_button_color2(&mut self, button: ButtonId, state: &str, color: ButtonColor) {
@@ -748,7 +731,7 @@ impl <D> ButtonDeck<D>
         // self.button_map.get(button).cloned()
         self.ddsetup.button_arena.iter().enumerate()
             .find(|(i,b)| b.name == bname)
-            .map(|(i,b)| ButtonId::new(self.deckid, i))
+            .map(|(i,b)| ButtonId::new(self.id, i))
             .ok_or_else(|| DeckError::InvalidRef)
     }
 
@@ -784,7 +767,7 @@ impl <D> ButtonDeck<D>
 
     fn button(&self, id: ButtonId) -> Result<&Button> {
         self.ddsetup.button_arena
-            .get(id.id())
+            .get(id.index)
             .ok_or(DeckError::InvalidRef)
     }
 
@@ -792,7 +775,7 @@ impl <D> ButtonDeck<D>
 
 
         self.ddsetup.button_arena
-            .get_mut(id.id())
+            .get_mut(id.index)
             .ok_or(DeckError::InvalidRef)
 
     }

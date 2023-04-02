@@ -51,6 +51,9 @@ fn main_with_result() -> Result<()> {
     let mut deck = ButtonDeckBuilder::<()>::new(DeviceKind::StreamDeck)
         .with_config("demo/deck.json")
         .with_functions(functions)
+        .with_function("test", |deck,arg| {
+            Ok(())
+        })
         .with_hidapi(HidApi::new()?)
         .build()?;
 

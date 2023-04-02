@@ -103,7 +103,19 @@
         },
         "fish": {
             "label": "Fish Button",
-            "image": "noto/animals/emoji_u1f41f.png"
+            "states": {
+                "fish": {
+                    "image": "noto/animals/emoji_u1f41f.png",
+                    "switch_button_state": "drom"
+                },
+                "drom": {
+                    "image": "noto/animals/emoji_u1f42a.png",
+                    "switch_button_state": "fish"
+                }
+            }
+
+
+            
         },
         "watch": {
             "label": "Watch Button",

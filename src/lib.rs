@@ -23,8 +23,6 @@ pub use deck::ButtonSetup;
 pub use deck::ButtonDeckSender;
 
 pub use button::Button;
-pub use button::ButtonId;
-pub use button::StateRef2;
 pub use button::ButtonColor;
 pub use button::ButtonState;
 pub use button::ButtonImage;
@@ -43,4 +41,51 @@ macro_rules! elog {
             error!("{}", e)
         }
     };
+}
+
+
+#[derive(Clone,Copy,Debug)]
+pub struct DeckId {
+    index: usize
+}
+
+#[derive(Clone,Copy,Debug)]
+pub struct SetupId {
+    pub deck: DeckId,
+    pub index: usize,
+ //    pub name: String
+}
+
+// impl Default for SetupId {
+//     fn default() -> Self {
+//         Self { index: 0, name: String::from("default") }
+//     }
+// }
+
+
+
+#[derive(Clone,Copy,Debug)]
+pub struct ButtonId {
+    deck: DeckId,
+    index: usize
+}
+
+#[derive(Clone,Copy,Debug)]
+pub struct StateId {
+    pub button: ButtonId,
+    pub index:  usize
+}
+
+
+
+
+impl ButtonId {
+
+    pub fn new(owner: DeckId, index: usize) -> Self {
+        ButtonId { deck: owner, index }
+    }
+
+    // pub fn id(&self) -> usize {
+    //     self.index
+    // }
 }

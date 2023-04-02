@@ -1,71 +1,43 @@
 use std::{path::{PathBuf, Path}, str::FromStr};
 
-use log::warn;
+use log::{warn, debug, info};
 use serde_json::Value;
-
-use crate::{device::PhysicalKey, deck::{FnRef, SetupRef}, DeckError};
+use crate::SetupId;
+use crate::{device::PhysicalKey, deck::{FnRef}, DeckError, ButtonId, StateId};
 
 type Result<T> = std::result::Result<T,DeckError>;
 
 const VALUE_NONE: ButtonValue = ButtonValue::None;
 
-#[derive(Clone,Debug)]
-pub enum StateRef2 {
-    Id(usize,usize),
-    Name(String)
-}
-
-impl From<&str> for StateRef2 {
-    fn from(s: &str) -> Self {
-        StateRef2::Name(String::from(s))
-    }
-}
-
-
-impl AsRef<StateRef2> for StateRef2 {
-    fn as_ref(&self) -> &StateRef2 {
-        self
-    }
-}
 
 
 
-#[derive(Clone,Debug)]
-pub struct StateRef {
-    pub id: usize,
-    pub name: String
-}
+// #[derive(Clone,Debug)]
+// pub enum StateRef2 {
+//     Id(ButtonId,usize),
+//     Name(String)
+// }
 
-impl Default for StateRef {
-    fn default() -> Self {
-        Self { id: 0, name: String::from("default") }
-    }
-}
-
-
-#[derive(Clone,Copy,Debug)]
-pub struct ButtonId {
-    owner: usize,
-    index: usize
-}
+// impl From<&str> for StateRef2 {
+//     fn from(s: &str) -> Self {
+//         StateRef2::Name(String::from(s))
+//     }
+// }
 
 
+// impl AsRef<StateRef2> for StateRef2 {
+//     fn as_ref(&self) -> &StateRef2 {
+//         self
+//     }
+// }
 
-impl ButtonId {
-    pub fn new(owner: usize, index: usize) -> Self {
-        ButtonId { owner, index }
-    }
 
-    pub fn id(&self) -> usize {
-        self.index
-    }
-}
 
 
 pub struct Button
 {
     // a private, unique id
-    pub (crate) reference:  usize,
+    pub (crate) id:  ButtonId,
 
     pub (crate) name:  String,
     pub (crate) label: String,
@@ -74,10 +46,10 @@ pub struct Button
 
     pub (crate) defaults: ButtonState,
 
-    pub (crate) default_state: usize,
-    pub (crate) current_state: usize,
+    pub (crate) default_state: StateId,
+    pub (crate) current_state: StateId,
 
-    pub (crate) states: Vec<(String,ButtonState)>,
+    pub (crate) states: Vec<ButtonState>,
 
 }
 
@@ -87,78 +59,82 @@ impl Button {
         self.physical.clone()
     }
 
-    // FIXME. use stateref, not usize for current_state
-    pub fn toggle_state(&mut self) -> bool {
-        let next = if self.current_state == 0 {
-            StateRef { id: 1, name: String::new() }
-        } else {
-            StateRef { id: 0, name: String::new() }
-        };
 
-        self.switch_state_xxx(&next)
+    pub fn get_state_id(&self, name: &str) -> Option<StateId> {
+        self.states.iter().find_map(|s| {
+            if name == s.name {
+                Some(s.id)
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn state<'a>(&'a self, id: StateId) -> Option<&'a ButtonState> {
+        self.states.get(id.index)
+    }
+
+    pub fn state_mut<'a>(&'a mut self, id: StateId) -> Option<&'a mut ButtonState> {
+        self.states.get_mut(id.index)
+    }
+
+    pub fn state_by_name_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut ButtonState> {
+        self.get_state_id(name).and_then(|id| self.state_mut(id))
     }
 
     pub fn current_state<'a>(&'a self) -> &'a ButtonState {
+        self.state(self.current_state)
+            .expect("current_state must always be present")
+    }
 
-        let cs = self.states.get(self.current_state)
-            .expect("current_state must always be present");
+    pub fn toggle_state(&mut self) -> bool {
+        let next = if self.current_state.index == 0 {
+            StateId { button: self.id, index: 1 }
+        } else {
+            StateId { button: self.id, index: 0 }
+        };
 
-        &cs.1
+        self.switch_state_internal(Some(next))
+    }
 
+    pub fn switch_state2(&mut self, next_state: StateId) -> bool 
+    {
+        self.switch_state_internal(Some(next_state))
+    }
+
+    pub fn switch_state_by_name(&mut self, next_state: &str) -> bool {
+        self.switch_state_internal(self.get_state_id(next_state))
     }
 
 
-    pub fn state_by_ref_mut<'a>(&'a mut self, sref: StateRef2) -> Option<&'a mut ButtonState> {
+    fn switch_state_internal(&mut self, next_state: Option<StateId>) -> bool 
+    {
 
-        match sref {
-            StateRef2::Id(bid, sid) => {
-//                 if bid != self.reference { return None }
-                match self.states.get_mut(sid) {
-                    Some(s) => Some(&mut s.1),
-                    None => None
-                }
-            },
-            StateRef2::Name(name) => {
-                let x = self.states.iter_mut().enumerate()
-                    .find(|(i,(n,s))| n == &name)
-                    .map(|(i, (n,s))| s);
-
-                x
+        info!("switch_state_internal: {:?}", next_state);
+        let nextid = if let Some(id) = next_state {
+            match self.state(id) {
+                Some(s) => Some(s.id.clone()),
+                None => None
             }
+        } else {
+            None
+        };
+
+        if let Some(id) = nextid {
+            let last = self.current_state.clone();
+            self.current_state = id;
+    
+            id.index != last.index
+        } else {
+            false
         }
-
-    }
-
-
-    pub fn state_by_name_mut<'a>(&'a mut self, name: &str) -> Option<&'a mut ButtonState> {
-        let bid = self.reference;
-        self.states.iter_mut()
-            .find(|(n,s)| n == name)
-            .map(|(i,s)| s)
-    }
-
-
-    pub fn state_by_id<'a>(&'a self, id: usize) -> Option<&'a ButtonState> {
-
-        match self.states.get(id) {
-            Some(s) => Some(&s.1),
-            None => None
-        }
-
     }
 
 
 
-    // pub fn get_state_ref(&self, name: &str) -> Option<StateRef> {
-    //     self.states.iter().find(|(n,s)| n == name)
-    //         .map(|(_,s)| s.reference.clone())
-    // }
 
-    pub fn get_state_ref2(&self, name: &str) -> Option<StateRef2> {
-        let bid = self.reference;
-        self.states.iter().enumerate().find(|(i,(n,s))| n == name)
-            .map(|(i,s)| StateRef2::Id(bid, i))
-    }
+
+
 
     pub fn set_state_image(&mut self, state_name: &str, icon: Option<ButtonImage>) -> Result<()> {
 
@@ -183,63 +159,22 @@ impl Button {
 
 
 
-    pub fn switch_state(&mut self, next_state: &str) -> bool {
-        if let Some(s) = self.get_state_ref2(next_state) {
-            self.switch_state2(&s)
-        } else {
-            false
-        }
-    }
 
 
-    pub fn switch_state_xxx(&mut self, next_state: &StateRef) -> bool 
-    {
 
-        let next = match self.states.get(next_state.id) {
-            Some(s) => next_state.id,
-            None => self.current_state
-        };
-    
-        let last = self.current_state;
-        self.current_state = next;
+    // fn switch_state_internal(&mut self, opt_next: Option<usize>) -> bool {
 
-        next != last
-
-    }
-
-    pub fn switch_state2(&mut self, next_state: &StateRef2) -> bool 
-    {
-        let opt_next = match next_state {
-            StateRef2::Id(_, id) => {
-                Some(*id)
-            },
-            StateRef2::Name(name) => {
-                let r = self.states.iter()
-                    .find(|(n,s) | name==n )
-                    .map(|(n,r)| r.reference.id);
-                    r
-
-            },
-        };
-
-
-        // let next = match self.states.get(next_state.id) {
-        //     Some(s) => next_state.id,
-        //     None => self.current_state
-        // };
-
-        if let Some(next) = opt_next {
+    //     if let Some(next) = opt_next {
             
-            let last = self.current_state;
-            self.current_state = next;
+    //         let last = self.current_state;
+    //         self.current_state = next;
     
-            next != last
-        } else {
-            false
-        }
+    //         next != last
+    //     } else {
+    //         false
+    //     }
+    // }
 
-
-    }
 
 
     pub fn switch_state_action(&mut self) -> bool {
@@ -249,11 +184,8 @@ impl Button {
             None => None
         };
 
-        if let Some(sn) = b {
-            self.switch_state_xxx(&sn)
-        } else {
-            false
-        }
+        self.switch_state_internal(b)
+
     }
 
     pub fn effective_value<'a>(&'a self) -> &'a ButtonValue {
@@ -339,7 +271,7 @@ impl Button {
         }
     }
 
-    pub fn effective_switch_button_state<'a>(&'a self) -> Option<&'a StateRef> {
+    pub fn effective_switch_button_state<'a>(&'a self) -> Option<&'a StateId> {
         match &self.current_state().switch_button_state {
             Some(c) => Some(c),
             None => match &self.defaults.switch_button_state {
@@ -349,7 +281,7 @@ impl Button {
         }
     }
 
-    pub fn effective_switch_deck_setup<'a>(&'a self) -> Option<&'a SetupRef> {
+    pub fn effective_switch_deck_setup<'a>(&'a self) -> Option<&'a SetupId> {
         match &self.current_state().switch_deck_setup {
             Some(c) => Some(c),
             None => match &self.defaults.switch_deck_setup {
@@ -487,12 +419,12 @@ impl Default for ButtonValue {
 
 
 
-
-#[derive(Default)]
+#[derive(Debug)]
 pub struct ButtonState
 {
 
-    pub (crate) reference: StateRef,
+    pub (crate) id: StateId,
+    pub (crate) name: String,
 
     pub (crate) color: Option<ButtonColor>,
     pub (crate) image: Option<ButtonImage>,
@@ -503,8 +435,8 @@ pub struct ButtonState
     pub (crate) on_button_down: Option<FnRef>,
     pub (crate) on_button_up:   Option<FnRef>,
 
-    pub (crate) switch_button_state: Option<StateRef>,
-    pub (crate) switch_deck_setup: Option<SetupRef>,
+    pub (crate) switch_button_state: Option<StateId>,
+    pub (crate) switch_deck_setup: Option<SetupId>,
 
 }
 
