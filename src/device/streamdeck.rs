@@ -114,6 +114,8 @@ fn readwrite_thread(mut sd: StreamDeckDevice, rx: Receiver<DeviceEvent>, tx: Sen
 
     debug!("readwrite_thread");
 
+    sd.deck.set_brightness(100);
+
     loop {
 
         let btns = sd.deck.read_buttons(Some(Duration::from_millis(20)));
