@@ -15,7 +15,7 @@ serde_derive = "1.0.150"
 serde_json = { version = "1.0.89", features = [ "preserve_order" ] }
 hidapi = "*"
 # streamdeck  = "0.7.0"
-streamdeck  = { git = "https://github.com/maotv/rust-streamdeck.git" }
+streamdeck  = { git = "https://github.com/maotv/rust-streamdeck.git", rev = "5d8ff916e97650c70b776c8f703d23aff0fdc359" }
 midir = "0.8.0"
 wmidi = "4.0.6"
 [[example]]
