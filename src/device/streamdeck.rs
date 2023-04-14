@@ -181,7 +181,9 @@ pub fn discover_streamdeck(maybe_hidapi: &mut Option<HidApi>) -> Result<ButtonDe
         pids::ORIGINAL,
         pids::ORIGINAL_V2,
         pids::MINI,
+        pids::MINI_V2,
         pids::XL,
+        pids::XL_V2,
         pids::MK2,
     ];
 
