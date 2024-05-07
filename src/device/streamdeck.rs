@@ -62,6 +62,7 @@ impl StreamDeckDevice {
             Kind::Original => "stream_deck",
             Kind::OriginalV2 => "stream_deck",
             Kind::Mini => "stream_deck_mini",
+            Kind::RevisedMini => "stream_deck_mini",
             Kind::Xl => "stream_deck_xl",
             Kind::Mk2 => "stream_deck",
         });
@@ -183,9 +184,9 @@ pub fn discover_streamdeck(maybe_hidapi: &mut Option<HidApi>) -> Result<ButtonDe
         pids::ORIGINAL,
         pids::ORIGINAL_V2,
         pids::MINI,
-        pids::MINI_V2,
+        pids::REVISED_MINI,
         pids::XL,
-        pids::XL_V2,
+        pids::REVISED_XL,
         pids::MK2,
     ];
 
