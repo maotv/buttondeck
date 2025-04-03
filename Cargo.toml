@@ -13,12 +13,12 @@ indexmap = { version = "1.9.2", features = ["serde-1"] }
 serde = "1.0.150"
 serde_derive = "1.0.150"
 serde_json = { version = "1.0.89", features = [ "preserve_order" ] }
-hidapi = "2.6.1"
+hidapi = "2.4"
 # streamdeck  = "0.7.0"
 # streamdeck  = { git = "https://github.com/maotv/rust-streamdeck.git", rev = "dd1c4602bc7e4f2a88cf0f5ca2bc1a04314953ad" }
 bitstream-io = "~2.3.0"
 ravif = "=0.11.5"
-streamdeck  = { git = "https://github.com/maotv/rust-streamdeck.git", rev = "4d385d479d8a19f56da11ea9718e3d980b502239" }
+streamdeck  = { git = "https://github.com/maotv/rust-streamdeck.git", rev = "f5003215fd2e79852ab14c4964c14e05ad7b4627" }
 midir = "0.8.0"
 wmidi = "4.0.6"
 [[example]]

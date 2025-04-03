@@ -65,6 +65,7 @@ impl StreamDeckDevice {
             Kind::RevisedMini => "stream_deck_mini",
             Kind::Xl => "stream_deck_xl",
             Kind::Mk2 => "stream_deck",
+            Kind::Plus => "stream_deck_plus",
         });
 
         StreamDeckDevice {  
